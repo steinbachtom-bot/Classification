@@ -135,7 +135,8 @@ test('Inhalt bleibt (Kürzel, Grüsse im Satz, ähnliche Zeilen)', () => {
   ['LG Fotobuch kaputt angekommen', 'VG Rechnung doppelt', 'VG Rechnung', 'Grüsse aus den Ferien, das Fotobuch ist nie angekommen',
     'Von meinem Konto wurde doppelt abgebucht, obwohl ich alles gesendet', 'Gesendet von meinem Mann, aber nie angekommen',
     'Kd. hat FB n. erh. -- Tracking prüfen', 'Seite 12 fehlt, Format A4, Rahmen 30x40', 'Die Frau am Telefon war unfreundlich',
-    'Frau hat angerufen, Paket fehlt', 'Mo-Fr. Paket kommt nicht', 'Windows 11: Software stürzt ab', 'Gutscheincode funktioniert nicht']
+    'Frau hat angerufen, Paket fehlt', 'Mo-Fr. Paket kommt nicht', 'Windows 11: Software stürzt ab', 'Gutscheincode funktioniert nicht',
+    'VG RE doppelt', 'LG FB kaputt', 'Gruss FB\nSeiten lose']
     .forEach(t => assert.strictEqual(E.prepare(t).cleaned, t, JSON.stringify(t)));
   assert.strictEqual(E.learnText('LG Fotobuch kaputt angekommen'), 'LG Fotobuch kaputt angekommen');
   assert.deepStrictEqual(codes(E.classify('LG Fotobuch kaputt angekommen')), codes(E.classify('Fotobuch kaputt angekommen')));
@@ -146,9 +147,21 @@ test('Formularfelder: Kontaktdaten weg, Notiz bleibt', () => {
     ['Name: Anna Beispiel\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
     ['Name: Anna Maria von Beispiel-Muster\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
     ['E-Mail: anna@example.com\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
-    ['Adresse: Beispielweg 3, 8000 Zürich\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']]]
+    ['Adresse: Beispielweg 3, 8000 Zürich\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
+    // Name, Adresse, Firma, Ort …: immer ganz weg, auch als langer Satz
+    ['Fotobuch kaputt angekommen.\nAdresse: Chemin des Vignes, chez Dupont, Lausanne', 'Fotobuch kaputt angekommen.', ['Kontaktdaten']],
+    ['Fotobuch kaputt angekommen.\nAdresse: bei Familie Meier im Oberdorf, Hinterhaus links', 'Fotobuch kaputt angekommen.', ['Kontaktdaten']],
+    ['Fotobuch kaputt angekommen.\nName: Meier statt Maier auf dem Cover gedruckt', 'Fotobuch kaputt angekommen.', ['Kontaktdaten']],
+    ['Fotobuch kaputt angekommen.\nFirma: Fotostudio Beispiel, zuständig ist Frau Beispiel persönlich', 'Fotobuch kaputt angekommen.', ['Kontaktdaten']],
+    ['Fotobuch kaputt angekommen.\nOrt: im Garten beim Nachbarn Herr Keller abgelegt', 'Fotobuch kaputt angekommen.', ['Kontaktdaten']],
+    ['Unternehmen: Beispiel AG, Abteilung für interne Kommunikation\nRechnung doppelt', 'Rechnung doppelt', ['Kontaktdaten']],
+    // Telefon/E-Mail/Handy: ein echter Satz ist eine Notiz (Bezeichnung weg)
+    ['E-Mail: bitte nur an meine Geschäftsadresse schreiben', 'bitte nur an meine Geschäftsadresse schreiben', []],
+    ['Handy: Kunde meldet, Paket nie angekommen', 'Kunde meldet, Paket nie angekommen', []],
+    ['Tel.: Kundin ruft an, Rechnung doppelt erhalten', 'Kundin ruft an, Rechnung doppelt erhalten', []]]
     .forEach(([t, exp, rm]) => { const p = E.prepare(t); assert.strictEqual(p.cleaned, exp, t); assert.deepStrictEqual(p.removed, rm, t); });
   assert.deepStrictEqual(codes(E.classify('Telefon: Kundin sagt, FB nicht erhalten')), codes(E.classify('Kundin sagt, FB nicht erhalten')));
+  assert.strictEqual(E.learnText('Fotobuch kaputt angekommen.\nAdresse: Chemin des Vignes, chez Dupont, Lausanne'), 'Fotobuch kaputt angekommen.');
 });
 test('Konto-, Karten-, Telefon-, Referenznummern, Adressen und Namen werden entfernt', () => {
   // [Text, darf nicht bleiben, Grund in "removed", muss bleiben]
@@ -185,6 +198,121 @@ test('Konto-, Karten-, Telefon-, Referenznummern, Adressen und Namen werden entf
   assert.ok(E.prepare('RE-2026/48213 doppelt bezahlt').text.includes('Rechnung'));
   // Vorschläge ändern sich durch das Entfernen nicht
   assert.deepStrictEqual(codes(E.classify('Kreditkarte doppelt belastet, Karte 4111 1111 1111 1111 bitte prüfen')), codes(E.classify('Kreditkarte doppelt belastet, Karte bitte prüfen')));
+});
+// eigene Instanz mit zusätzlichen Abkürzungen (z.B. von Tom später ergänzt)
+function engineWithAbk(extra) {
+  const m = { exports: {} };
+  new Function('module', 'exports', fs.readFileSync(path.join(ROOT, 'src/engine.js'), 'utf8'))(m, m.exports);
+  m.exports.build(ctx.S, ctx.K, ctx.A, Object.assign({}, ctx.ABK, extra), ctx.B);
+  return m.exports;
+}
+test('Namen nach Anrede: Abkürzungen bleiben, "Fr." = Freitag, "meine Frau" = Nomen', () => {
+  // Kurznotizen mit Anrede + Name + interner Abkürzung: Name weg, Abkürzung und Vorschlag bleiben
+  [['Hr. Müller FB n. erh.', 'Hr. FB n. erh.', '50410'], ['Frau Meier RE doppelt', 'Frau RE doppelt', '50103'],
+    ['Fr. Meier LW beschädigt', 'Fr. LW beschädigt', '10116'], ['Frau Huber LS fehlt', 'Frau LS fehlt', '430'],
+    ['Herr Graf WK leer', 'Herr WK leer', '30212'], ['Kd. Fr. Meier FB n. erh.', 'Kd. Fr. FB n. erh.', '50410'],
+    ['Frau Meier FBs n. erh.', 'Frau FBs n. erh.', '50410'], ['Hr. FB n. erh.', 'Hr. FB n. erh.', '50410'],
+    ['Hr. Keller GS n. erh.', 'Hr. GS n. erh.', null],
+    // "Fr." = Freitag
+    ['Am Fr. Rechnung doppelt erhalten', 'Am Fr. Rechnung doppelt erhalten', '50103'],
+    ['Seit Fr. Fotobuch nicht erhalten', 'Seit Fr. Fotobuch nicht erhalten', '50410'],
+    ['Letzten Fr. Paket bestellt, noch nicht da', 'Letzten Fr. Paket bestellt, noch nicht da', '50410'],
+    ['jeden Fr. FB n. erh.', 'jeden Fr. FB n. erh.', '50410'], ['Mo. - Fr. Paket kommt nicht', 'Mo. - Fr. Paket kommt nicht', null],
+    // "meine Frau", "die Familie": Nomen, das bekannte Wort danach bleibt
+    ['Ich habe für die Familie Kalender bestellt', 'Ich habe für die Familie Kalender bestellt', '10114'],
+    ['Meine Frau Tasse zerbrochen', 'Meine Frau Tasse zerbrochen', '381'],
+    ['unserer Familie Kalender geschenkt', 'unserer Familie Kalender geschenkt', null]]
+    .forEach(([t, exp, code]) => {
+      assert.strictEqual(E.prepare(t).cleaned, exp, t);
+      if (code) assert.strictEqual(codes(E.classify(t))[0], code, t + ' -> ' + codes(E.classify(t)));
+    });
+  assert.ok(codes(E.classify('Hr. Keller GS n. erh.')).includes('20709'));
+  // alle Abkürzungen in Grossbuchstaben aus ABK, auch später ergänzte
+  const caps = Object.keys(ctx.ABK).filter(k => /^[A-ZÄÖÜ]{2,}s?$/.test(k));
+  assert.ok(caps.length >= 12, caps.join(','));
+  caps.forEach(k => assert.strictEqual(E.prepare('Hr. Keller ' + k + ' fehlt').cleaned, 'Hr. ' + k + ' fehlt', k));
+  assert.strictEqual(E.prepare('Hr. Keller TX kaputt').cleaned, 'Hr. kaputt');
+  const EX = engineWithAbk({ TX: 'Tasse' });
+  assert.strictEqual(EX.prepare('Hr. Keller TX kaputt').cleaned, 'Hr. TX kaputt');
+  assert.strictEqual(EX.prepare('Frau TX kaputt').cleaned, 'Frau TX kaputt');
+});
+test('Namen nach Anrede werden trotzdem entfernt (Titel, Doppelnamen, Grossbuchstaben, bekannte Wörter)', () => {
+  // [Text, bereinigt]
+  [['Hr. Hans Peter Imhof ruft an: Rechnung doppelt', 'Hr. ruft an: Rechnung doppelt'],
+    ['Frau Dr. Anna Imhof ruft an: Rechnung doppelt', 'Frau ruft an: Rechnung doppelt'],
+    ['Herr Prof. Dr. Hans Imhof reklamiert', 'Herr reklamiert'], ['Fr. Dr. Meier FB n. erh.', 'Fr. FB n. erh.'],
+    ['Hr. H. Meier wartet', 'Hr. wartet'], ['Frau Anna Maria Beispiel wartet', 'Frau wartet'],
+    ['Frau Meier. Paket fehlt', 'Frau. Paket fehlt'],
+    // Nachnamen in Grossbuchstaben sind keine Abkürzungen
+    ['Frau ROTH FB n. erh.', 'Frau FB n. erh.'], ['Herr OTT RE doppelt', 'Herr RE doppelt'], ['Hr. HUG ruft an wegen FB', 'Hr. ruft an wegen FB'],
+    ['Fam. EGLI Fotobuch nicht erhalten', 'Fam. Fotobuch nicht erhalten'],
+    // Nachname = bekanntes Wort: als 1. Wort nach der Anrede trotzdem weg
+    ['Frau Klein reklamiert Farbstich', 'Frau reklamiert Farbstich'], ['Rückruf an Frau Klein', 'Rückruf an Frau'],
+    ['Herr Frei wartet auf Paket', 'Herr wartet auf Paket'], ['für Herrn Frei Kalender bestellt', 'für Herrn Kalender bestellt'],
+    // Freitag/Nomen nur vor einem bekannten Wort, sonst Name
+    ['Am Fr. Meier angerufen, Paket fehlt', 'Am Fr. angerufen, Paket fehlt'], ['meine Frau Susanne hat bestellt', 'meine Frau hat bestellt'],
+    ['für die Familie Keller bestellt', 'für die Familie bestellt'], ['Ich habe mit Ihrer Frau Keller telefoniert', 'Ich habe mit Ihrer Frau telefoniert']]
+    .forEach(([t, exp]) => {
+      const p = E.prepare(t);
+      assert.strictEqual(p.cleaned, exp, t);
+      assert.ok(p.removed.includes('Namen'), t + ': ' + p.removed);
+    });
+  assert.ok(!/Imhof|Hans|Anna/.test(E.learnText('Frau Dr. Anna Imhof ruft an: Rechnung doppelt')));
+});
+const DISC = 'Diese E-Mail enthält vertrauliche Informationen und ist nur für den Adressaten bestimmt.';
+test('Grussformel oder "--" weit oben: nur die Zeile weg, wenn keine Signatur folgt', () => {
+  [['Liebe Grüsse Anna\nDas Fotobuch ist nie angekommen.', 'Das Fotobuch ist nie angekommen.'],
+    ['Gruss\nWK Tasse kaputt', 'WK Tasse kaputt'], ['LG\nFotobuch kaputt', 'Fotobuch kaputt'],
+    ['Grüsse\nDas Paket ist nicht angekommen', 'Das Paket ist nicht angekommen'],
+    ['Kunde ruft an\n--\nFB Seiten lose, Ersatz gewünscht', 'Kunde ruft an\nFB Seiten lose, Ersatz gewünscht'],
+    ['--\nDas Fotobuch ist nie angekommen.', 'Das Fotobuch ist nie angekommen.'],
+    // Notiz in Grossbuchstaben ist keine Signaturzeile
+    ['Danke!\nFB NICHT ERH.', 'FB NICHT ERH.'], ['Danke\nRE DOPPELT', 'RE DOPPELT'],
+    // "Am … schrieb" als Satz (keine Kopfzeile) bleibt
+    ['Am Montag schrieb die Kundin, dass das Fotobuch fehlt', 'Am Montag schrieb die Kundin, dass das Fotobuch fehlt'],
+    // nach dem Text: "--" = Signatur, auch wenn danach keine typische Signaturzeile kommt
+    ['Das Fotobuch ist nie angekommen, bitte prüfen Sie das.\n--\n' + DISC, 'Das Fotobuch ist nie angekommen, bitte prüfen Sie das.'],
+    ['Guten Tag, mein Fotobuch ist nie angekommen, bitte prüfen.\n--\nAnna Beispiel\nBeispiel AG\n' + DISC, 'mein Fotobuch ist nie angekommen, bitte prüfen.']]
+    .forEach(([t, exp]) => assert.strictEqual(E.prepare(t).cleaned, exp, JSON.stringify(t)));
+  [['Liebe Grüsse Anna\nDas Fotobuch ist nie angekommen.', '50410'], ['Kunde ruft an\n--\nFB Seiten lose, Ersatz gewünscht', '315'],
+    ['--\nDas Fotobuch ist nie angekommen.', '50410'], ['Danke!\nFB NICHT ERH.', '50410'], ['Danke\nRE DOPPELT', '50103']]
+    .forEach(([t, c]) => assert.ok(codes(E.classify(t)).includes(c), JSON.stringify(t) + ' -> ' + codes(E.classify(t))));
+});
+test('kurze Weiterleitungen: Kopf weg, weiter mit der weitergeleiteten Mail', () => {
+  // [Text, muss bleiben, darf nicht bleiben, Code unter den Vorschlägen]
+  [['FYI\nLG Tom\n\nAm 3.9.2026 schrieb Kunde:\nDas Fotobuch ist nie angekommen.', ['Das Fotobuch ist nie angekommen.'], ['Tom', 'schrieb'], '50410'],
+    ['Hallo\nGruss Anna\n\n-----Ursprüngliche Nachricht-----\nVon: kunde@example.ch\nBetreff: Fotobuch\n\nMein Fotobuch ist kaputt angekommen, die Seiten lösen sich.',
+      ['Mein Fotobuch ist kaputt angekommen, die Seiten lösen sich.'], ['Anna', 'Ursprüngliche', 'Nachricht', 'example'], '315'],
+    ['Weiterleitung\nGruss Peter\n\n---------- Forwarded message ----------\nFrom: x@example.ch\nMeine Rechnung ist doppelt.',
+      ['Meine Rechnung ist doppelt.'], ['Peter', 'Forwarded', 'message'], '50103'],
+    ['Bitte erledigen\nLG Tom\n\nAm 3.9.2026 um 10:12 schrieb Anna Beispiel <anna@example.ch>:\nGuten Tag, die Rechnung ist doppelt.',
+      ['die Rechnung ist doppelt.'], ['Tom', 'Anna', 'Beispiel', 'schrieb'], '50103'],
+    ['Zur Info\nGruss Sandra\n\nVon: Anna Beispiel\nGesendet: Montag, 3. September 2026\nAn: Service\nBetreff: Fotobuch\n\nGuten Tag\nMein Fotobuch ist nie angekommen.\nFreundliche Grüsse\nAnna',
+      ['Mein Fotobuch ist nie angekommen.'], ['Sandra', 'Anna', 'Beispiel', 'Freundliche'], '50410'],
+    ['FYI\n\nFreundliche Grüsse\nTom\n\n-----Original Message-----\nFrom: anna@example.ch\nSubject: Fotobuch\nDas Fotobuch hat lose Seiten.',
+      ['Das Fotobuch hat lose Seiten.'], ['Tom', 'Original'], '315']]
+    .forEach(([t, keep, gone, code]) => {
+      const p = E.prepare(t), l = E.learnText(t);
+      keep.forEach(k => { assert.ok(p.cleaned.includes(k), `${JSON.stringify(t)} -> ${JSON.stringify(p.cleaned)} (ohne ${k})`); assert.ok(l.includes(k), 'learnText ' + k); });
+      gone.forEach(g => assert.ok(!p.cleaned.includes(g), `${JSON.stringify(t)} -> ${JSON.stringify(p.cleaned)} (enthält ${g})`));
+      assert.ok(codes(E.classify(t)).includes(code), JSON.stringify(t) + ' -> ' + codes(E.classify(t)));
+    });
+  // Antwort mit Text darüber (ab 3 Wörtern vor dem Gruss bzw. 6 Wörtern vor dem Kopf): Verlauf darunter fällt weg (wie bisher)
+  assert.strictEqual(E.prepare('Wann kommt es endlich?\nGruss Anna\n\nAm 3.9.2026 schrieb Kundendienst <service@example.ch>:\nIhr Paket wurde versendet.').cleaned,
+    'Wann kommt es endlich?');
+  assert.strictEqual(E.prepare('Mein Fotobuch ist leider immer noch nicht angekommen.\n\nAm 3.9.2026 schrieb Kundendienst <service@example.ch>:\nIhr Paket wurde versendet.').cleaned,
+    'Mein Fotobuch ist leider immer noch nicht angekommen.');
+});
+test('nur Anrede, Signatur oder Fusszeile: nicht lernbar', () => {
+  ['Guten Tag\n\nFreundliche Grüsse\nAnna Beispiel', 'Grüezi\nFreundliche Grüsse\nHans Meier', 'Guten Tag\n\n--\nAnna Beispiel\nBeispielweg 3',
+    'Danke!\nAnna Beispiel\n079 123 45 67', 'Freundliche Grüsse\nAnna Beispiel\nBeispielweg 3\n8000 Zürich',
+    'Guten Tag\n\nFreundliche Grüsse\nAnna Beispiel\nBeispiel AG\n' + DISC, 'Guten Tag\n\n--\nAnna Beispiel\nBeispielweg 3\n' + DISC,
+    'Freundliche Grüsse\nAnna Beispiel\nmobil 079 123 45 67', 'LG Anna\nVon meinem iPhone gesendet', 'Danke!\nAnna Beispiel\nTel. 079 123 45 67',
+    'Merci\nAnna\nc/o Beispiel AG', 'Liebe Grüsse\nanna', 'Danke!\nANNA BEISPIEL\nBEISPIEL AG', 'Freundliche Grüsse\nAnna Beispiel\nLeiterin Marketing\nBeispiel AG',
+    'Siehe Anhang\n\nFreundliche Grüsse\nAnna Beispiel\nLeiterin Marketing\nBeispiel AG | Beispielweg 3 | 8000 Zürich\nwww.example.ch\n' + DISC]
+    .forEach(t => assert.strictEqual(E.learnText(t), '', JSON.stringify(t)));
+  ['Guten Tag\n\nFreundliche Grüsse\nAnna Beispiel\nBeispiel AG\n' + DISC, 'Liebe Grüsse\nanna', 'Danke!\nANNA BEISPIEL\nBEISPIEL AG']
+    .forEach(t => assert.strictEqual(E.prepare(t).cleaned, '', JSON.stringify(t)));
 });
 test('lernbar / learnText', () => {
   assert.strictEqual(E.LEARN_MAX, 1000);
@@ -278,7 +406,12 @@ D.forEach(d => { byI[d.i] = d; });
 
 test('Bericht: Felder wie vereinbart', () => {
   assert.deepStrictEqual(Object.keys(R).filter(k => k !== 'details'), ['total', 'usable', 'skipped', 'zuKurzZumLernen', 'sameText', 'nearDup',
-    'tested', 'sampleEvery', 'variants', 'perCode', 'confusions', 'triggers', 'words', 'errors']);
+    'tested', 'sampleEvery', 'variants', 'pairs', 'perCode', 'confusions', 'triggers', 'words', 'errors']);
+  assert.deepStrictEqual(Object.keys(R.pairs), ['gelernt', 'gelernt_streng']);
+  Object.values(R.pairs).forEach(p => {
+    assert.deepStrictEqual(Object.keys(p), ['top1', 'top3']);
+    Object.values(p).forEach(x => { assert.deepStrictEqual(Object.keys(x), ['fixed', 'broken']); assert.ok(Number.isInteger(x.fixed) && Number.isInteger(x.broken)); });
+  });
   assert.deepStrictEqual(Object.keys(R.skipped), ['unbekannterCode', 'leer']);
   assert.deepStrictEqual(Object.keys(R.confusions), ['regeln', 'gelernt']);
   R.variants.forEach(v => assert.deepStrictEqual(Object.keys(v), ['id', 'name', 'n', 'top1', 'top3', 'none']));
@@ -355,6 +488,30 @@ test('Varianten gezählt und benannt', () => {
   assert.ok(V.gelernt.top3 >= V.regeln.top3, JSON.stringify([V.gelernt, V.regeln]));
   // ohne fast gleiche Texte: nie besser als mit ihnen, wenn es fast gleiche Texte gibt
   assert.ok(V.gelernt_streng.top3 <= V.gelernt.top3, JSON.stringify([V.gelernt_streng, V.gelernt]));
+});
+test('pairs: neu richtig / neu falsch gegenüber "regeln" (Platz 1 und unter den 3)', () => {
+  const V = {}; R.variants.forEach(v => { V[v.id] = v; });
+  ['gelernt', 'gelernt_streng'].forEach(id => {
+    const exp = { top1: { fixed: 0, broken: 0 }, top3: { fixed: 0, broken: 0 } };
+    D.forEach(d => {
+      const a0 = d.top.regeln[0] === d.c, a1 = d.top[id][0] === d.c, b0 = d.top.regeln.includes(d.c), b1 = d.top[id].includes(d.c);
+      if (a1 && !a0) exp.top1.fixed++; if (a0 && !a1) exp.top1.broken++;
+      if (b1 && !b0) exp.top3.fixed++; if (b0 && !b1) exp.top3.broken++;
+    });
+    assert.deepStrictEqual(R.pairs[id], exp, id);
+    // Differenz der Summen = neu richtig - neu falsch
+    assert.strictEqual(V[id].top1 - V.regeln.top1, exp.top1.fixed - exp.top1.broken, id);
+    assert.strictEqual(V[id].top3 - V.regeln.top3, exp.top3.fixed - exp.top3.broken, id);
+  });
+  assert.ok(R.pairs.gelernt.top3.fixed > 0, JSON.stringify(R.pairs));
+  // kleines Beispiel: Stichwörter finden den Code nicht, der fast gleiche Fall schon -> 2 neu richtig, ohne fast gleiche nicht
+  const code = lonely[1], T = 'Die Glanzfolie auf dem Umschlag löst sich an den Ecken ab und wirft Blasen';
+  const r = evalAll(E, [{ t: T, c: code }, { t: 'Kundin schreibt, ' + T, c: code }]);
+  assert.deepStrictEqual(r.pairs.gelernt, { top1: { fixed: 2, broken: 0 }, top3: { fixed: 2, broken: 0 } });
+  assert.deepStrictEqual(r.pairs.gelernt_streng, { top1: { fixed: 0, broken: 0 }, top3: { fixed: 0, broken: 0 } });
+  // leer: nichts getestet
+  const r0 = evalAll(E, []);
+  assert.deepStrictEqual(r0.pairs, { gelernt: { top1: { fixed: 0, broken: 0 }, top3: { fixed: 0, broken: 0 } }, gelernt_streng: { top1: { fixed: 0, broken: 0 }, top3: { fixed: 0, broken: 0 } } });
 });
 test('Leave-one-out: eigener Code nie aus dem Fall selbst', () => {
   const iu = cases.indexOf(UNIQUE);
@@ -481,17 +638,27 @@ test('Bericht: pro Code, Verwechslungen, Auslöser, Fehlgriffe', () => {
   assert.deepStrictEqual(R.errors, D.filter(d => !d.top.regeln.includes(d.c) || !d.top.gelernt.includes(d.c))
     .map(d => ({ i: d.i, c: d.c, regeln: d.top.regeln, gelernt: d.top.gelernt })));
 });
-// erwartete Wortstatistik (unabhängig nachgerechnet): ohne Wörter direkt nach Frau/Herr/Kunde … im
-// unbereinigten Text mit ausgeschriebenen Abkürzungen (Namen)
-const CUE = new Set(['frau', 'herr', 'herrn', 'hr', 'fr', 'familie', 'fam', 'kunde', 'kundin', 'name']);
-const ABK_RE = Object.keys(ctx.ABK).sort((a, b) => b.length - a.length).map(k => [new RegExp('(^|[^\\p{L}\\p{N}])' +
-  k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}:])', /[a-zäöüß]/.test(k) ? 'giu' : 'gu'), ctx.ABK[k]]);
-const expandAbk = t => ABK_RE.reduce((s, [re, to]) => s.replace(re, (m0, pre) => pre + to), t);
+// erwartete Wortstatistik (unabhängig nachgerechnet): ohne Namen im unbereinigten Text (mit Gross-/Kleinschreibung):
+// unbekanntes Wort nach Frau/Herr …; nach Kunde/Kd./Name nur mit Grossbuchstaben oder alles klein ("kd. muster")
+const CUE_T = new Set(['frau', 'herr', 'herrn', 'hr', 'fr', 'familie', 'fam']), CUE_K = new Set(['kunde', 'kundin', 'kd', 'kde', 'kdin', 'name']);
+// bekanntes Wort oder Abkürzung? (von aussen gemessen: bleibt als 2. Wort nach "Frau Anna" stehen)
+const capF = w => w[0].toUpperCase() + w.slice(1), knownMemo = {};
+const knownWord = w => knownMemo[w] !== undefined ? knownMemo[w] : (knownMemo[w] = E.prepare('Frau Anna ' + capF(w) + ' ruft an').cleaned.includes(capF(w)));
+function nameWords(t) {
+  const rt = String(t).match(/[\p{L}\p{N}]+/gu) || [], names = new Set();
+  rt.forEach((w, k) => {
+    const cue = k ? E.norm(rt[k - 1]) : '';
+    if (!(CUE_T.has(cue) || CUE_K.has(cue)) || knownWord(w)) return;
+    if (CUE_K.has(cue) && !/^\p{Lu}/u.test(w) && /^\p{Lu}/u.test(rt[k - 1])) return;
+    E.norm(w).split(' ').forEach(x => names.add(x));
+  });
+  return names;
+}
 function wordStats(cs, idx) {
   const docs = {}, dfAll = {}, n = {}, ok = w => w.length >= 4 && !/^\d+$/.test(w);
   idx.forEach(i => {
-    const c = cs[i].c, all = E.norm(E.prepare(text(cs[i])).text).split(' '), raw = E.norm(expandAbk(text(cs[i]))).split(' ');
-    const names = new Set(raw.filter((w, k) => k && CUE.has(raw[k - 1])));
+    const c = cs[i].c, all = E.norm(E.prepare(text(cs[i])).text).split(' ');
+    const names = nameWords(text(cs[i]));
     const ws = new Set(all.filter(w => ok(w) && !names.has(w)));
     n[c] = (n[c] || 0) + 1;
     ws.forEach(w => { docs[c + ' ' + w] = (docs[c + ' ' + w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1; });
@@ -537,6 +704,30 @@ test('Wortstatistik ohne Namen', () => {
   assert.ok(w && w.n === named.length, JSON.stringify(w));
   assert.ok(!w.words.some(([x]) => /zwahlen|bettina/.test(x)), JSON.stringify(w.words));
   assert.ok(w.words.some(([x]) => x === 'lieferung'), JSON.stringify(w.words));   // normale Wörter bleiben
+});
+test('Wortstatistik: Wort nach Kunde/Kd./Name ist kein Name, wenn es klein geschrieben oder bekannt ist', () => {
+  const V = ['heute', 'gestern', 'erneut', 'telefonisch', 'per Mail', 'nochmals'];
+  // [Vorlage, Wort, das in der Liste stehen muss]
+  const G = [[v => 'Kunde storniert Bestellung ' + v + ', doppelt bestellt', 'storniert'], [v => 'Kd. Farbstich auf allen Seiten ' + v, 'farbstich'],
+    [v => 'Kundin reklamiert Leinwand ' + v, 'reklamiert'], [v => 'Kd. GS ungültig ' + v, 'gutschein'], [v => 'Name falsch gedruckt ' + v, 'falsch'],
+    [v => 'kd. storniert Bestellung ' + v, 'storniert']];
+  // Namen bleiben draussen: "Kd. Zwahlen", "kd. zwahlen", "Kundin Zwahlen", "Name: Zwahlen"
+  const N = [v => 'Kd. Zwahlen ' + v + ' Gutschein ungültig', v => 'kd. zwahlen ' + v + ' Gutschein ungültig', v => 'Kundin Zwahlen ' + v + ' Gutschein ungültig'];
+  const extra = [];
+  G.forEach(([f], g) => V.forEach(v => extra.push({ t: f(v), c: lonely[7 + g] })));
+  N.forEach((f, g) => V.forEach(v => extra.push({ t: f(v), c: lonely[7 + G.length + g] })));
+  const r = evalAll(E, synth.concat(extra), { minDocs: 5 });
+  G.forEach(([f, want], g) => {
+    const w = r.words.find(x => x.code === lonely[7 + g]);
+    assert.ok(w && w.words.some(([x]) => x === want), f('…') + ': ' + JSON.stringify(w && w.words));
+  });
+  N.forEach((f, g) => {
+    const w = r.words.find(x => x.code === lonely[7 + G.length + g]);
+    assert.ok(w && w.words.length && !w.words.some(([x]) => /zwahlen/.test(x)), f('…') + ': ' + JSON.stringify(w && w.words));
+  });
+  // wie die unabhängige Nachrechnung
+  const cs = synth.concat(extra), idx = cs.map((x, i) => i), { docs } = wordStats(cs, idx);
+  r.words.forEach(x => x.words.forEach(([w, d]) => assert.strictEqual(d, docs[x.code + ' ' + w], `${x.code} ${w}`)));
 });
 E.setExamples([]);
 

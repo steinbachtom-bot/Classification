@@ -629,6 +629,180 @@ check('T14: toCases meldet Textspalten, in denen oft ein Code steht', () => {
   eq(T.toCases([['a', 'b', 'c'], ['Tasse kaputt', 'Tasse kaputt', '517']], { headerRow: 0, codeCol: 2, textCols: [0, 1] }, resolve).cases[0].t, 'Tasse kaputt');
 });
 
+/* ---------- Korrekturen nach der zweiten Durchsicht (T15–T20); alle Daten erfunden ---------- */
+const ALLE = built.classes.map(c => c.code);
+const zufall = s => () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;   // fester Zufall für die Tests
+const mischen = (a, r) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const daten = (n, f) => table(null, n, f || (i => [MAILS[i % 4], CODES4[i % 4]]));
+
+check('T15: Kopfzeile: offener Fall in der ersten Datenzeile ist nicht die Kopfzeile', () => {
+  for (const [head, top] of [[['Notiz', 'Klassifizierung'], [['Kunde ruft wegen Lieferung zurück', 'nicht klassifiziert']]],
+    [['Notiz', 'Klassifizierung'], [['Kunde meldet sich nochmals', 'Unclassified']]],
+    [['Beschreibung', 'Grund'], [['Kunde wartet auf Rückruf', 'Grund unbekannt']]],
+    [['Notiz', 'Anliegen'], [['Kunde ruft nochmals an', 'offen']]],
+    [['Notiz', 'Anliegen'], [['Kunde ruft nochmals an', 'offen'], ['Rückruf Kunde', 'offen']]],
+    [['Kundennachricht', 'Fallart'], [['Kunde hat eine Frage zum Datum', 'Sonstiges']]]]) {
+    const rows = [head, ...top, ...daten(20)];
+    const g = T.guess(rows, resolve);
+    eq([head, top.length, g], [head, top.length, { headerRow: 0, codeCol: 1, textCols: [0], fillDown: false }]);
+    eq(tc(rows, g).cases.length, 20);
+  }
+  // Fallnummer-Spalte (Buchstaben + Ziffern): gleiche Punkte, die Zeile mit Textspalte gewinnt
+  let rows = [['Fall', 'Notiz', 'Klassifizierung'], ['CAS-10001', 'Kunde ruft zurück', 'nicht klassifiziert'],
+    ...daten(20, i => ['CAS-' + (10002 + i), MAILS[i % 4], CODES4[i % 4]])];
+  eq(T.guess(rows, resolve), { headerRow: 0, codeCol: 2, textCols: [1], fillDown: false });
+  // vier Spalten: die Beschreibung bleibt Text (nicht nur der kurze Betreff)
+  rows = [['Kunde', 'Betreff', 'Beschreibung', 'Anliegen'], ['Anna Beispiel', 'Rückruf', 'Kunde ruft an', 'offen'],
+    ...daten(20, i => [NAMEN[i % 4], ['Ihre Bestellung', 'Frage zur Rechnung', 'Lieferung fehlt'][i % 3], MAILS[i % 4], CODES4[i % 4]])];
+  eq(T.guess(rows, resolve), { headerRow: 0, codeCol: 3, textCols: [1, 2], fillDown: false });
+  // Titelzeile mit 2 Zellen über der Kopfzeile verliert weiterhin (gleiche Punkte: die untere zuerst)
+  for (const title of [['Fallbericht Kundendienst', 'nach Klassifizierung'], ['Erstellt von: T. Beispiel', 'Fälle nach Kategorie'], ['Filter:', 'Klassifizierung = alle']]) {
+    rows = [title, ['Notiz', 'Klassifizierung'], ...daten(20)];
+    eq([title, T.guess(rows, resolve)], [title, { headerRow: 1, codeCol: 1, textCols: [0], fillDown: false }]);
+  }
+});
+
+check('T16: guess mit opts.headerRow: Kopfzeile vorgegeben, Spalten und fillDown neu erraten', () => {
+  const rows = [['Notiz', 'Klassifizierung'], ['Kunde ruft wegen Lieferung zurück', 'nicht klassifiziert'], ...daten(20)];
+  eq(T.guess(rows, resolve, { headerRow: 0 }), { headerRow: 0, codeCol: 1, textCols: [0], fillDown: false });
+  eq(T.guess(rows, resolve, { headerRow: '0' }), { headerRow: 0, codeCol: 1, textCols: [0], fillDown: false });   // Wert aus <select>
+  eq(T.guess(rows, resolve, { headerRow: 1 }), { headerRow: 1, codeCol: 1, textCols: [], fillDown: false });   // Titel "Kunde …" = SKIP
+  eq(T.guess(rows, resolve, { headerRow: -1 }), { headerRow: -1, codeCol: 1, textCols: [0], fillDown: false });
+  eq(T.guess(rows, resolve, { headerRow: 99 }).headerRow, -1);   // ungültig -> keine Kopfzeile
+  eq(T.guess(rows, resolve, { headerRow: null }), T.guess(rows, resolve));   // nicht angegeben -> raten
+  eq(T.guess(rows, resolve, { headerRow: 'x' }), T.guess(rows, resolve));
+  // Klassifizierung nur aus den Zeilen unter der Kopfzeile (darüber eine Übersicht mit Codes in Spalte A)
+  const ueb = [...table(null, 10, i => [ALLE[i], String(10 + i)]), ['Notiz', 'Klassifizierung'], ...daten(5)];
+  eq(T.guess(ueb, resolve).codeCol, 0);
+  eq(T.guess(ueb, resolve, { headerRow: 10 }), { headerRow: 10, codeCol: 1, textCols: [0], fillDown: false });
+  // gruppierter Bericht unter Titelzeilen: vorgegebene Kopfzeile = gleiche Spalten und fillDown wie geraten
+  const grp = [['Fälle nach Klassifizierung', '', ''], ['Klassifizierung', 'Fallnummer', 'Notiz'],
+    ...[0, 1, 2, 3].flatMap(k => [[CODES4[k] + ' (3)', '', ''], ['', 'F' + k + '1', MAILS[k]], ['', 'F' + k + '2', 'Paket fehlt noch'], ['', 'F' + k + '3', 'Wo bleibt die Ware?']])];
+  eq(T.guess(grp, resolve), { headerRow: 1, codeCol: 0, textCols: [2], fillDown: true });
+  eq(T.guess(grp, resolve, { headerRow: 1 }), { headerRow: 1, codeCol: 0, textCols: [2], fillDown: true });
+  eq(tc(grp, T.guess(grp, resolve, { headerRow: 1 })).cases.length, 12);
+});
+
+check('T17: fillDown nur bei gruppierten Berichten, nie bei flachen Listen mit vielen offenen Fällen', () => {
+  const flach = (n, p, seed, codes, amEnde) => {
+    const r = zufall(seed), rows = [['Fallnr', 'Beschreibung', 'Klassifizierung']];
+    for (let i = 0; i < n; i++) {
+      const c = codes[Math.floor(Math.pow(r(), 2) * codes.length)], leer = amEnde ? i >= n * (1 - p) : r() < p;
+      rows.push(['CAS-' + (1000 + i), MAILS[i % 4] + ' (' + i + ')', leer ? '' : c]);
+    }
+    return rows;
+  };
+  for (const p of [0.3, 0.35, 0.5, 0.7]) for (const seed of [1, 2, 3]) {
+    eq(['verstreut', p, seed, T.guess(flach(400, p, seed, ALLE.slice(0, 60)), resolve).fillDown], ['verstreut', p, seed, false]);
+    eq(['am Ende', p, seed, T.guess(flach(400, p, seed, ALLE.slice(0, 60), true), resolve).fillDown], ['am Ende', p, seed, false]);
+  }
+  // kleine Liste, fast jeder Fall mit eigenem Code (60 Zeilen, 40 % leer)
+  let rows = [['Beschreibung', 'Klassifizierung']].concat(ALLE.slice(0, 60).map((c, i) => [MAILS[i % 4] + ' ' + i, i % 5 < 2 ? '' : c]));
+  rows[4][1] = rows[20][1] = rows[33][1] = ALLE[2];   // ein paar Wiederholungen wie in echten Listen
+  eq(T.guess(rows, resolve).fillDown, false);
+  // viele Fälle mit Code, aber ohne Text (Telefonfälle), dazwischen Fälle ohne Code: keine Gruppenzeilen
+  const r = zufall(7);
+  rows = [['Fallnr', 'Beschreibung', 'Klassifizierung']];
+  for (let i = 0; i < 300; i++) { const q = r(); rows.push(['CAS-' + i, q < 0.4 ? '' : MAILS[i % 4], q >= 0.4 && q < 0.75 ? '' : ALLE[Math.floor(r() * 40)]]); }
+  eq(T.guess(rows, resolve).fillDown, false);
+  // gruppiert: Code in der ersten Zeile der Gruppe (Gruppen in beliebiger Reihenfolge)
+  const gruppen = mischen(ALLE.slice(0, 40), zufall(3));
+  rows = [['Klassifizierung', 'Notiz']];
+  gruppen.forEach((c, k) => { for (let j = 0; j <= k % 4; j++) rows.push([j ? '' : c, MAILS[(k + j) % 4]]); });
+  let g = T.guess(rows, resolve);
+  eq(g.fillDown, true);
+  eq(tc(rows, g).cases.length, rows.length - 1);
+  // zwei Ebenen (Monat, dann Klassifizierung): Codes wiederholen sich pro Monat; mit Zwischentitel, Summen oder Gruppenzeilen
+  const monate = ['Januar', 'Februar', 'März'];
+  const zweiEbenen = art => {
+    const out = [['Monat', 'Klassifizierung', 'Notiz']];
+    monate.forEach(m => {
+      if (art === 'titel') out.push([m, '', '']);
+      ALLE.slice(0, 12).forEach((c, k) => {
+        if (art === 'gruppenzeile') out.push(['', c + ' (2)', '']);
+        out.push([art === 'titel' ? '' : m, art === 'gruppenzeile' ? '' : c, MAILS[k % 4]], ['', '', 'Paket fehlt ' + k]);
+        if (art === 'summe') out.push(['', 'Summe', '2']);
+      });
+    });
+    return out;
+  };
+  for (const art of ['titel', 'summe', 'gruppenzeile']) {
+    rows = zweiEbenen(art); g = T.guess(rows, resolve);
+    eq([art, g.fillDown, tc(rows, g).cases.length], [art, true, 72]);
+  }
+});
+
+check('T18: kurze Notizen: Stichwörter aus einem Wort und Notiz-Titel mit Kunde/Agent sind Text', () => {
+  // (keine Wörter, die selbst eine Bezeichnung sind wie "Doppelbestellung": so eine Spalte wäre eine Klassifizierung)
+  const EIN = [['Lieferverzug', '50410'], ['Storno', '50403'], ['Rekla', '221'], ['Mahnung', '50102'], ['Rechnungskopie', '50114'],
+    ['Farbstich', '321'], ['Retoure', '50104'], ['Twint', '50205'], ['FB n. erh.', '50410'], ['Kratzer', '362']];
+  // 80 % einzelne Wörter
+  for (const h of ['Notiz', 'Stichwort', 'Anliegen']) {
+    const rows = table(['Datum', h, 'Klassifizierung'], 50, i => ['2026-09-' + String(i % 28 + 1).padStart(2, '0'), EIN[i % 10][0], EIN[i % 10][1]]);
+    eq([h, T.guess(rows, resolve).textCols], [h, [1]]);
+  }
+  // ohne Kopfzeile: einzelne Wörter (Priorität) gegen Stichwort-Notizen: die Notizen; bei Gleichstand die längeren Zellen
+  let rows = table(null, 30, i => [['Hoch', 'Tief', 'Mittel'][i % 3], EIN[i % 10][0], EIN[i % 10][1]]);
+  eq(T.guess(rows, resolve).textCols, [1]);
+  const EIN1 = EIN.filter(x => !x[0].includes(' '));   // nur einzelne Wörter: gleiche Punktzahl wie die Priorität
+  rows = table(null, 30, i => [['Hoch', 'Tief', 'Mittel', 'Dringend', 'Normal', 'Später'][i % 6], EIN1[i % 9][0], EIN1[i % 9][1]]);
+  eq(T.guess(rows, resolve).textCols, [1]);
+  // eine Auswahl mit wenigen Werten (Kanal) ist nie der Haupttext, auch ohne andere Textspalte
+  rows = table(['Datum', 'Kanal', 'Klassifizierung'], 30, i => ['2026-09-01', ['Telefon', 'E-Mail', 'Chat'][i % 3], CODES4[i % 4]]);
+  eq(T.guess(rows, resolve).textCols, []);
+  // Kennungen aus einem Wort (Ziffern, @, _, Punkt im Wort, sehr lang) bleiben ausgeschlossen
+  for (const f of [i => 'RX' + (7000 + i), i => 'fall_' + i, i => 'kunde' + i + '@example.com', i => 'foto' + i + '.jpg', i => 'Bearbeitungsstatusaenderungsvermerk' + 'x'.repeat(i % 3)]) {
+    rows = table(['Referenz', 'Notiz', 'Klassifizierung'], 30, i => [f(i), NOTIZEN[i % 6][0], NOTIZEN[i % 6][1]]);
+    eq([f(1), T.guess(rows, resolve).textCols], [f(1), [1]]);
+  }
+  // Titel mit Notiz-Wort und Kunde/Agent/Kontakt: Text, auch bei kurzen Notizen (Namen daneben nicht)
+  for (const h of ['Notiz Agent', 'Agent-Notiz', 'Kundendienst-Notiz', 'Bearbeiter-Notiz', 'Kommentar Kundenservice', 'Notiz zum Kunden',
+    'Notiz Kunde', 'Kundenanliegen', 'Kundenmail', 'Kommentar Agent', 'Kundenmeldung', 'Kontaktnotiz', 'Kundenproblem', 'Customer Notes']) {
+    rows = table(['Fallnr', 'Kunde', h, 'Klassifizierung'], 30, i => ['CAS-' + (100 + i), NAMEN[i % 4], NOTIZEN[i % 6][0], NOTIZEN[i % 6][1]]);
+    eq([h, T.guess(rows, resolve).textCols], [h, [2]]);
+  }
+  // Personen- und Adress-Titel bleiben ausgeschlossen (auch "Kunden-E-Mail" = Adresse)
+  for (const h of ['Kunden-E-Mail', 'Kontakt E-Mail', 'Customer', 'Contact', 'Kundin', 'Auftraggeber', 'Requester', 'Endkunde', 'Kontaktperson']) {
+    rows = table([h, 'Notiz', 'Klassifizierung'], 20, i => ['Firma Beispiel AG, Abteilung ' + i, NOTIZEN[i % 6][0], NOTIZEN[i % 6][1]]);
+    eq([h, T.guess(rows, resolve).textCols], [h, [1]]);
+  }
+  // Inhalt zählt weiterhin: "Kundenmail" mit Adressen ist kein Text
+  rows = table(['Kundenmail', 'Notiz', 'Klassifizierung'], 20, i => ['kunde' + i + '@example.com', NOTIZEN[i % 6][0], NOTIZEN[i % 6][1]]);
+  eq(T.guess(rows, resolve).textCols, [1]);
+  // Status aus einem Wort unter "Kommentar" neben einer Beschreibung: nur die Beschreibung
+  rows = table(['Beschreibung', 'Kommentar', 'Klassifizierung'], 24, i => [MAILS[i % 4], ['erledigt', 'ok', 'Rückruf', 'offen'][i % 4], CODES4[i % 4]]);
+  eq(T.guess(rows, resolve).textCols, [0]);
+});
+
+check('T19: Codes mit "." oder "," als Tausendertrennzeichen (ganze Zelle)', () => {
+  eq(['10.211', '3.712', '50.412', '6.251', '50,412', '50 412', '50.410,00', '50,410.00'].map(resolve),
+    ['10211', '3712', '50412', '6251', '50412', '50412', '50410', '50410']);   // früher 211, 712, 412, 251 …
+  eq(['50410.0', '50410,0', '511'].map(resolve), ['50410', '50410', '511']);
+  eq(['50.999', '1.234', '1.234.567', '12.03.2026', '50.410.0'].map(resolve), [null, null, null, null, null]);
+  eq(['511,517', '511.517', '315 312'].map(resolve), ['511', '511', '315']);   // 3 Ziffern vorne: eher eine Liste von Codes
+  eq(['50 412', '3 712', '10 211'].map(resolve), [null, null, null]);   // gewöhnliches Leerzeichen: nicht 412, 712, 211 (s. T9)
+  // in einer Tabelle
+  const rows = table(['Notiz', 'Code'], 12, i => [MAILS[i % 4], ['50.410', '50.114', '3.712', '10.211'][i % 4]]);
+  eq(tc(rows).cases.map(c => c.c).slice(0, 4), ['50410', '50114', '3712', '10211']);
+});
+
+check('T20: Standardblatt mit opts.resolve: das erste Blatt mit Fällen, nicht eine Übersicht davor', async () => {
+  const row = (r, a, b) => '<row r="' + r + '">' + is('A' + r, a) + (/^\d+$/.test(b) ? '<c r="B' + r + '"><v>' + b + '</v></c>' : is('B' + r, b)) + '</row>';
+  const uebersicht = [row(1, 'Klassifizierung', 'Anzahl'), ...CODES4.map((c, i) => row(i + 2, c + ' - ' + E.byCode[c].label, String(10 + i))), row(6, 'Gesamt', '46')].join('');
+  const faelle = [row(1, 'Notiz', 'Code'), ...table(null, 6, i => row(i + 2, MAILS[i % 4], CODES4[i % 4]))].join('');
+  const z = xlsx1(uebersicht, '', [['Übersicht'], ['Fälle', null, faelle]]);
+  let x = await T.read(z, 'f.xlsx');
+  eq([x.sheet, x.sheetIndex], ['Übersicht', 0]);   // ohne resolve wie bisher
+  x = await T.read(z, 'f.xlsx', { resolve });
+  eq([x.sheet, x.sheetIndex, x.sheets], ['Fälle', 1, ['Übersicht', 'Fälle']]);
+  eq(tc(x.rows).cases.length, 6);
+  x = await T.read(z, 'f.xlsx', { resolve, sheet: 0 });   // Auswahl gilt
+  eq(x.sheet, 'Übersicht');
+  // kein Blatt mit Fällen: das erste mit Daten
+  x = await T.read(xlsx1('<row r="1">' + is('A1', 'nur Titel') + '</row>', '', [['Titel'], ['Übersicht', null, uebersicht]]), 'f.xlsx', { resolve });
+  eq([x.sheet, x.sheetIndex], ['Übersicht', 1]);
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {

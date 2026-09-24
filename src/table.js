@@ -368,15 +368,22 @@ var Table = (function () {
     return n >= 5;
   }
   // Blatt wählen: opts.sheet (Index in names = sichtbare Blätter), sonst das erste mit Daten, sonst das erste.
+  // Mit opts.resolve (Code-Erkennung wie bei guess): zuerst das erste Blatt, auf dem guess eine Klassifizierung und
+  // eine Textspalte findet – nicht eine Übersicht oder Pivot-Tabelle ("Klassifizierung | Anzahl") davor.
   // load(k) liefert die Zeilen (oder ein Promise darauf)
   function pickSheet(names, load, opts) {
-    var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first;
+    var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first, data = null,
+      res = opts && typeof opts.resolve === "function" ? opts.resolve : null;
     function done(k, rows) { return { rows: rows, sheet: names[k], sheets: names, sheetIndex: k }; }
+    function cases(rows) { var g = guess(rows, res); return g.codeCol >= 0 && g.textCols.length > 0; }
     function next(k) {
       return Promise.resolve(load(k)).then(function (rows) {
         if (!k) first = rows;
-        if (hasData(rows)) return done(k, rows);
-        return k + 1 < names.length ? next(k + 1) : done(0, first);
+        if (hasData(rows)) {
+          if (!res || cases(rows)) return done(k, rows);
+          if (!data) data = { k: k, rows: rows };
+        }
+        return k + 1 < names.length ? next(k + 1) : data ? done(data.k, data.rows) : done(0, first);
       });
     }
     if (want >= 0 && want < names.length && want % 1 === 0) return Promise.resolve(load(want)).then(function (rows) { return done(want, rows); });
@@ -457,7 +464,8 @@ var Table = (function () {
   }
 
   // Datei lesen: .xlsx, Excel-2003-XML, HTML-Tabelle oder Text (CSV/TSV); altes .xls -> Fehler "XLS".
-  // opts.sheet = Index des Blattes in der gelieferten Liste sheets
+  // opts.sheet = Index des Blattes in der gelieferten Liste sheets; opts.resolve = Code-Erkennung (codeResolver),
+  // damit als Standard ein Blatt mit Fällen gewählt wird (s. pickSheet)
   function read(bytes, fileName, opts) {
     return new Promise(function (ok) {
       var u = bytesOf(bytes), text, d, m;
@@ -503,7 +511,16 @@ var Table = (function () {
     labels.sort(function (a, b) { return b.len - a.len; });
     function find(s) {
       var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, k, x, L, hit = null, tree;
-      s = s.trim().replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
+      s = s.trim();
+      // ganze Zelle eine Zahl mit "." / "," / NBSP als Tausendertrennzeichen ("10.211", "50,412", "50.410,00"): die ganze
+      // Zahl zählt; mit 1–2 Ziffern vorne nie ein Stück davon ("50.999" -> nichts statt 999; "50 412" mit gewöhnlichem
+      // Leerzeichen -> nichts statt 412). Mit 3 Ziffern vorne evtl. eine Liste ("511,517"), dann wie bisher
+      if ((m = /^(\d{1,3})([., \u00A0])(\d{3}(?:\2\d{3})*)(?:(?!\2)[.,]0+)?$/.exec(s))) {
+        v = m[1] + m[3].replace(/\D/g, "");
+        if (m[2] !== " " && known[v]) return v;
+        if (m[1].length < 3) return null;
+      }
+      s = s.replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
       while ((m = re.exec(s))) if (known[m[2]]) return m[2];
       v = norm(s);
       if (!v) return null;
@@ -529,9 +546,16 @@ var Table = (function () {
     };
   }
 
-  // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel sagt zugleich "Text" und die Zellen sind lang)
-  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent|kunde|kontakt|absender|\bvon\b|from|account|firma|link|\burls?\b|checksum|pr(ue|ü)fsumme|do not modify)/i;
-  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text|body|inhalt|mailtext|mail text|bemerkung|anmerkung|anfrage)/i;
+  // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel nennt zugleich eine Notiz, s. NOTEHEAD,
+  // oder sagt allgemein "Text" und die Zellen sind lang)
+  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent|kunde|kundin|customer|kontakt|contact|requester|auftraggeber|absender|\bvon\b|from|account|firma|link|\burls?\b|checksum|pr(ue|ü)fsumme|do not modify)/i;
+  // Titel einer Textspalte (auch weitere Textspalten neben dem Haupttext), s. textTitle
+  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text|body|inhalt|mailtext|mail text|bemerkung|anmerkung|anfrage|meldung|feedback|stichw)/i;
+  // Titel, der eine Notiz oder Nachricht nennt: nie wegen SKIP ausgeschlossen ("Notiz Agent", "Kundenanliegen", "Kundenmail");
+  // der Inhalt wird trotzdem geprüft (Adressen, Nummern, Links). "E-Mail" am Wortanfang ist eine Adresse ("Kunden-E-Mail")
+  var NOTEHEAD = /(notiz|note|bemerkung|anmerkung|kommentar|comment|beschreibung|description|nachricht|message|anliegen|anfrage|problem|meldung|feedback|stichw)/i;
+  function noteTitle(t) { return NOTEHEAD.test(t) || /mail/i.test(t) && !/\be-?mail/i.test(t); }
+  function textTitle(t) { return EXTRA.test(t) || noteTitle(t); }
   var CODEHEAD = /(klass|kateg|categ|class|code|grund|reason|typ|thema|topic)/i;
   var NUMERIC = /^[\d\s.,:\/+-]+$/;
   // Summenzeilen in gruppierten Berichten (in der Spalte Klassifizierung)
@@ -540,16 +564,27 @@ var Table = (function () {
   var JUNK = /^(https?:\/\/|www\.)|^[{(]?[0-9a-f]{8}(-?[0-9a-f]{4}){3}-?[0-9a-f]{12}[)}]?$|^(?=\S*\d)(?=\S*[a-z])[A-Za-z0-9+\/_=-]{16,}$/i;
   function words(v) { return v.split(/\s+/).length; }
   function subtotal(v) { return SUBTOTAL.test(v); }
+  // einzelnes Wort, das nach Kennung aussieht (Ziffern, @, _, :, Punkt im Wort, sehr lang); "Storno" oder "Rekla." nicht
+  function oddToken(v) { return v.length > 25 || /[\d@_:]|\.\S/.test(v) || JUNK.test(v); }
+  function distinct(r) {   // verschiedene gefüllte Werte einer Zeile
+    var seen = Object.create(null), cnt = 0;
+    r.forEach(function (x) { x = str(x).trim(); if (x && !seen[x]) { seen[x] = 1; cnt++; } });
+    return cnt;
+  }
 
   // Kopfzeile, Spalte mit der Klassifizierung, Textspalten, Gruppen ohne Code in jeder Zeile?
-  function guess(rows, resolve) {
+  // opts.headerRow (Zahl, -1 = keine Kopfzeile): Kopfzeile vorgegeben (Auswahl in der Oberfläche); Klassifizierung,
+  // Textspalten und fillDown werden dafür neu erraten.
+  function guess(rows, resolve, opts) {
     rows = rows || [];
-    var n = rows.length, w = 0, top = Math.min(n, 315), codeCol = -1, best = 0, headerRow = -1, first = -1, hc = [],
-      sample = [], stats = [], main = -1, cand = [], textCols, fillDown = false, i, j, k, v, s, ne, ok, tn, te, any;
+    var fixed = opts && opts.headerRow != null && opts.headerRow !== "" && isFinite(opts.headerRow) ? Math.floor(+opts.headerRow) : null;
+    var n = rows.length, w = 0, codeCol = -1, best = 0, first = -1, hc = [], tries = [], res = null, from, top, i, j, k, v, s, ne, ok;
+    if (fixed != null && !(fixed >= 0 && fixed < n)) fixed = -1;
+    from = fixed != null ? fixed + 1 : 0; top = Math.min(n, from + 315);
     rows.forEach(function (r) { if (r.length > w) w = r.length; });
     // 1. Klassifizierung: grösster Anteil auflösbarer Werte (mindestens 30 %, ohne Summenzeilen)
     for (j = 0; j < w; j++) {
-      for (i = ne = ok = 0; i < top; i++) {
+      for (i = from, ne = ok = 0; i < top; i++) {
         v = cell(rows[i], j).trim();
         if (!v || subtotal(v)) continue;
         ne++; if (resolve(v)) ok++;
@@ -557,7 +592,10 @@ var Table = (function () {
       if (ne && ok / ne >= 0.3 && ok / ne > best) { best = ok / ne; codeCol = j; }
     }
     // 2. Kopfzeile: letzte Zeile vor dem ersten gültigen Code (in den ersten 15), deren Code-Zelle Text ist;
-    //    Titel- und Filterzeilen darüber zählen nicht. Bevorzugt eine Zeile, die wie Spaltentitel aussieht.
+    //    Titel- und Filterzeilen darüber zählen nicht. Punkte: sieht wie Spaltentitel aus (2, wenn die Code-Zelle wie
+    //    "Klassifizierung" lautet), dann Anzahl Zellen mit einem bekannten Titelwort. So verliert ein offener Fall
+    //    ("Kunde ruft wegen Lieferung zurück | nicht klassifiziert") gegen "Notiz | Klassifizierung". Bei Gleichstand
+    //    die unterste zuerst, aber nur, wenn es damit eine Textspalte gibt.
     function headerLike(r) {   // mindestens 2 kurze, verschiedene, nicht numerische Zellen
       var seen = Object.create(null), cnt = 0, x, y;
       for (x = 0; x < w; x++) {
@@ -568,7 +606,15 @@ var Table = (function () {
       }
       return cnt >= 2;
     }
-    if (codeCol >= 0) {
+    function titleCells(r) {   // kurze Zellen mit Titelwort ("Notiz", "Kundenname", "Klassifizierung")
+      for (var x = 0, cnt = 0, y; x < w; x++) {
+        y = cell(rows[r], x).trim();
+        if (y && words(y) <= 3 && (SKIP.test(y) || textTitle(y) || CODEHEAD.test(y))) cnt++;
+      }
+      return cnt;
+    }
+    if (fixed != null) tries = [fixed];
+    else if (codeCol >= 0) {
       for (i = 0; i < Math.min(n, 16) && first < 0; i++) {
         v = cell(rows[i], codeCol).trim();
         if (v && !subtotal(v) && resolve(v)) first = i;
@@ -576,54 +622,91 @@ var Table = (function () {
       }
       if (first >= 0 && hc.length) {
         for (k = -1, i = 0; i < hc.length; i++) {
-          s = headerLike(hc[i]) ? (CODEHEAD.test(cell(rows[hc[i]], codeCol)) ? 2 : 1) : 0;
-          if (s >= k) { k = s; headerRow = hc[i]; }
+          s = headerLike(hc[i]) ? (CODEHEAD.test(cell(rows[hc[i]], codeCol)) ? 2 : 1) * 1000 + titleCells(hc[i]) : 0;
+          if (s > k) { k = s; tries = []; }
+          if (s === k) tries.unshift(hc[i]);
         }
       } else {
         v = cell(rows[0], codeCol).trim();
-        headerRow = v && !NUMERIC.test(v) && !resolve(v) ? 0 : -1;
+        tries = [v && !NUMERIC.test(v) && !resolve(v) ? 0 : -1];
       }
-    } else headerRow = n > 1 && headerLike(0) ? 0 : -1;
-    // 3. Datenzeilen (ohne Summenzeilen) auswerten
-    for (i = headerRow + 1; i < n && sample.length < 300; i++) if (codeCol < 0 || !subtotal(cell(rows[i], codeCol))) sample.push(rows[i]);
-    for (j = 0; j < w; j++) {
-      s = { ne: 0, ok: 0, len: 0, words: 0, num: 0, one: 0, junk: 0 };
-      for (i = 0; i < sample.length; i++) {
-        v = cell(sample[i], j).trim();
-        if (!v) continue;
-        k = words(v);
-        s.ne++; s.len += v.length; s.words += k;
-        if (resolve(v)) s.ok++;
-        if (NUMERIC.test(v)) s.num++;
-        if (k === 1) s.one++;
-        if (JUNK.test(v) || k <= 4 && v.indexOf("@") >= 0) s.junk++;
+    } else tries = [n > 1 && headerLike(0) ? 0 : -1];
+    for (i = 0; i < tries.length && !(res && res.textCols.length); i++) {
+      s = columns(tries[i]);
+      if (!res || s.textCols.length) res = s;
+    }
+
+    // 3.+4. Datenzeilen nach der Kopfzeile hr (ohne Summenzeilen) auswerten, Textspalten wählen
+    function columns(hr) {
+      var sample = [], stats = [], main = -1, cand = [], x, y, st, kk;
+      function title(z) { var t = hr >= 0 ? cell(rows[hr], z).trim() : ""; return t.length <= 40 ? t : ""; }
+      function better(a, b) {   // mehr Wörter × Füllgrad; bei Gleichstand längere Zellen
+        return b < 0 || stats[a].score > stats[b].score + 1e-9 || stats[a].score > stats[b].score - 1e-9 && stats[a].avg > stats[b].avg;
       }
-      s.frac = s.ne ? s.ok / s.ne : 0; s.avg = s.ne ? s.len / s.ne : 0;
-      s.score = s.ne ? s.ne / sample.length * s.words / s.ne : 0;   // Füllgrad × Wörter pro Zelle
-      stats.push(s);
+      for (x = hr + 1; x < n && sample.length < 300; x++) if (codeCol < 0 || !subtotal(cell(rows[x], codeCol))) sample.push(rows[x]);
+      for (y = 0; y < w; y++) {
+        st = { ne: 0, ok: 0, len: 0, words: 0, num: 0, one: 0, odd: 0, junk: 0, vals: Object.create(null), nv: 0 };
+        for (x = 0; x < sample.length; x++) {
+          v = cell(sample[x], y).trim();
+          if (!v) continue;
+          kk = words(v);
+          st.ne++; st.len += v.length; st.words += kk;
+          if (resolve(v)) st.ok++;
+          if (NUMERIC.test(v)) st.num++;
+          if (kk === 1) { st.one++; if (oddToken(v)) st.odd++; }
+          if (st.nv <= 5 && !st.vals[v]) { st.vals[v] = 1; st.nv++; }   // verschiedene Werte (nur bis 6 gezählt)
+          if (JUNK.test(v) || kk <= 4 && v.indexOf("@") >= 0) st.junk++;
+        }
+        st.frac = st.ne ? st.ok / st.ne : 0; st.avg = st.ne ? st.len / st.ne : 0;
+        st.score = st.ne ? st.ne / sample.length * st.words / st.ne : 0;   // Füllgrad × Wörter pro Zelle
+        stats.push(st);
+      }
+      // Haupttext = meiste Wörter (bei mindestens 30 % gefüllten Zeilen), auch Stichwort-Notizen aus einem Wort
+      // ("Lieferverzug", "Storno"), aber keine Kennungen und keine Auswahl mit höchstens 5 Werten (Kanal, Priorität);
+      // dazu weitere Spalten mit Text-Titel und meist mehreren Wörtern
+      for (y = 0; y < w; y++) {
+        st = stats[y];
+        if (y === codeCol || !st.ne || st.frac >= 0.3 || st.num > st.ne * 0.5 || st.odd > st.ne * 0.7 || st.junk > st.ne * 0.3) continue;
+        if (SKIP.test(title(y)) && !noteTitle(title(y)) && !(EXTRA.test(title(y)) && st.avg >= 20)) continue;
+        cand.push(y);
+        if (st.ne >= 0.3 * sample.length && !(st.one > st.ne * 0.7 && st.nv <= 5 && st.ne >= 10) && better(y, main)) main = y;
+      }
+      return { headerRow: hr, textCols: main < 0 ? [] : cand.filter(function (z) {
+        return z === main || hr >= 0 && textTitle(title(z)) && stats[z].avg >= 5 && stats[z].one <= stats[z].ne * 0.7;
+      }) };
     }
-    // 4. Textspalten: Haupttext = meiste Wörter (bei mindestens 30 % gefüllten Zeilen), dazu Spalten mit Text-Titel
-    function title(x) { var t = headerRow >= 0 ? cell(rows[headerRow], x).trim() : ""; return t.length <= 40 ? t : ""; }
-    for (j = 0; j < w; j++) {
-      s = stats[j];
-      if (j === codeCol || !s.ne || s.frac >= 0.3 || s.num > s.ne * 0.5 || s.one > s.ne * 0.7 || s.junk > s.ne * 0.3) continue;
-      if (SKIP.test(title(j)) && !(EXTRA.test(title(j)) && s.avg >= 20)) continue;
-      cand.push(j);
-      if (s.ne >= 0.3 * sample.length && s.words >= 1.5 * s.ne && (main < 0 || s.score > stats[main].score)) main = j;
+
+    // 5. Gruppierter Bericht (Klassifizierung nur in der ersten Zeile der Gruppe, darunter leer)? Nur wenn
+    //    (a) mindestens 3 Gruppenzeilen (Code ohne Text), meist mit Fällen ohne Code darunter, und die meisten
+    //        Fälle ohne Code stehen unter einer Gruppenzeile, oder
+    //    (b) jede Klassifizierung ein Block: Codes fast alle verschieden (höchstens 5 % Wiederholungen; Summenzeilen und
+    //        Zwischentitel wie "Januar" beginnen einen neuen Abschnitt), die Fälle ohne Code stehen unter einem Code, in
+    //        mindestens 2 Blöcken. (Mit 20 % Wiederholungen würden kleine flache Listen mit vielen Codes noch gefüllt.)
+    //    Eine flache Liste mit vielen offenen Fällen (Codes wiederholt, Lücken verstreut) bekommt kein fillDown.
+    function grouped(hr, cols) {
+      var seen = Object.create(null), head = "", inRun = false, cnt = 0, codes = 0, rep = 0, heads = 0, fed = 0, tn = 0, te = 0,
+        underHead = 0, underCode = 0, runs = 0, x, r, c, rc, t;
+      function hasText(z) { return !blank(cell(r, z)); }
+      for (x = hr + 1; x < n && cnt < 300; x++) {
+        r = rows[x]; c = cell(r, codeCol).trim(); t = cols.some(hasText);
+        if (c && subtotal(c)) { seen = Object.create(null); head = ""; continue; }
+        cnt++;
+        if (!c && !t) { if (distinct(r) <= 1) seen = Object.create(null); continue; }
+        if (c) {
+          rc = resolve(c); head = rc ? (t ? "c" : "g") : ""; inRun = false;
+          if (rc) { codes++; if (seen[rc]) rep++; seen[rc] = 1; if (!t) heads++; }
+          if (t) tn++;
+          continue;
+        }
+        tn++; te++;
+        if (head === "g") { underHead++; if (!inRun) fed++; } else if (head === "c") underCode++;
+        if (head && !inRun) { runs++; inRun = true; }
+      }
+      return codes > 0 && te >= 0.3 * tn && (heads >= 3 && fed >= 0.7 * heads && underHead >= 0.6 * te ||
+        rep <= Math.max(1, 0.05 * codes) && underHead + underCode > 0.5 * te && runs >= 2);
     }
-    textCols = main < 0 ? [] : cand.filter(function (x) { return x === main || headerRow >= 0 && EXTRA.test(title(x)) && stats[x].avg >= 5; });
-    // 5. Gruppierter Bericht: Klassifizierung nur in der ersten Zeile der Gruppe, darunter leer
-    if (codeCol >= 0 && textCols.length) {
-      tn = te = 0; any = false;
-      sample.forEach(function (r) {
-        var c = cell(r, codeCol).trim();
-        if (c && resolve(c)) any = true;
-        if (!textCols.some(function (x) { return !blank(cell(r, x)); })) return;
-        tn++; if (!c) te++;
-      });
-      fillDown = any && tn > 0 && te >= 0.3 * tn;
-    }
-    return { headerRow: headerRow, codeCol: codeCol, textCols: textCols, fillDown: fillDown };
+    return { headerRow: res.headerRow, codeCol: codeCol, textCols: res.textCols,
+      fillDown: codeCol >= 0 && res.textCols.length > 0 && grouped(res.headerRow, res.textCols) };
   }
 
   // Zeilen nach der Kopfzeile -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code, ohne Text,

@@ -44,8 +44,11 @@ var Engine = (function () {
     // Anhang-Hinweise und Grussformeln (sonst gelten z.B. "Siehe Anhang" oder Grüsse als Inhalt)
     "siehe anhang anbei beilage beigefuegt iphone freundliche freundlichen gruesse gruessen gruss");
 
-  // Nach diesen Wörtern folgt meist ein Name (zählt nicht für die Wortstatistik)
-  var NAMECUE = set("frau herr herrn hr fr familie fam kunde kundin name");
+  // Nach diesen Wörtern folgt oft ein Name (zählt nicht für die Wortstatistik): nach einer Anrede jedes
+  // unbekannte Wort; nach Kunde/Kd./Name nur ein unbekanntes Wort mit Grossbuchstaben ("Kd. Muster") oder alles
+  // klein geschrieben ("kd. muster"), nicht "Kunde storniert", "Kd. Farbstich", "Name falsch"
+  var NAMECUE = set("frau herr herrn hr fr familie fam");
+  var NAMECUE_K = set("kunde kundin kd kde kdin name");
 
   // Wörter, die zeigen, dass ein Satz das eigentliche Anliegen beschreibt
   var SIGNAL = set("leider aber jedoch trotzdem obwohl problem probleme reklamation reklamieren beanstandung fehler fehlerhaft " +
@@ -81,7 +84,13 @@ var Engine = (function () {
   }
 
   var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [], nLit = 0, nPart = 0;
-  var vocab = Object.create(null), vocabLong = [];
+  var vocab = Object.create(null), vocabLong = [], abkCS = Object.create(null), abkCI = Object.create(null);
+
+  // Interne Abkürzung aus ABK (FB, FBs, RE, GS … genau so geschrieben; kd., erh. … beliebig) – nie ein Name
+  function isAbk(tok) {
+    var w = String(tok || "").replace(/\.$/, ""), l = w.toLowerCase();
+    return !!(abkCS[w] || abkCS[w + "."] || abkCI[l] || abkCI[l + "."]);
+  }
 
   // Bekanntes Wort (Regeln, Füllwörter …), auch gebeugt oder als Anfang eines zusammengesetzten Wortes
   function isVocab(tok) {
@@ -175,6 +184,9 @@ var Engine = (function () {
     Object.keys(groups).forEach(function (g) { groups[g].forEach(function (l) { l.parts.forEach(function (p) { addV(p.w); }); }); });
     [STOP, FILL, SIMSTOP, SIGNAL].forEach(function (o) { Object.keys(o).forEach(addV); });
     if (ABK) Object.keys(ABK).forEach(function (k) { norm(ABK[k]).split(" ").forEach(addV); });
+    // Schlüssel der Abkürzungen: Grossbuchstaben (auch mit Plural-s, "FBs") genau, sonst ohne Gross-/Kleinschreibung
+    abkCS = Object.create(null); abkCI = Object.create(null);
+    if (ABK) Object.keys(ABK).forEach(function (k) { if (/^[A-ZÄÖÜ]{2,}s?\.?$/.test(k)) abkCS[k] = 1; else abkCI[k.toLowerCase()] = 1; });
 
     // Abkürzungen: nur Grossbuchstaben = Gross-/Kleinschreibung beachten
     if (ABK) Object.keys(ABK).sort(function (a, b) { return b.length - a.length; }).forEach(function (k) {
@@ -194,6 +206,19 @@ var Engine = (function () {
   // ------------------------------------------------------------------
   var HEAD = /^\s*(von|from|de|gesendet|sent|envoy[ée]|datum|date|an|to|à|cc|bcc|betreff|subject|objet)\s*:(.*)$/i;
   var FIELD = /^\s*(name|vorname|nachname|e-?mail|telefon|tel\.?|mobile?|handy|natel|adresse|strasse|straße|plz|ort|plz\s*\/\s*ort|land|kundennummer|kunden-?nr\.?|bestellnummer|bestell-?nr\.?|auftragsnummer|auftrags-?nr\.?|firma|unternehmen)\s*:/i;
+  // Anrede + akademischer Titel + bis zu 3 Wörter mit Grossbuchstaben
+  var NAME_RE = /(^|[^\p{L}\p{N}])((?:Frau|Herrn?|Familie)[ \t]+|(?:Hr|Fr|Fam)\.[ \t]*)((?:(?:Prof|Dr|Dipl)\.(?:[ \t]*-?[ \t]*(?:Ing|med|phil|iur|oec|rer\.[ \t]*nat|habil)\.)?[ \t]*)*)([A-ZÄÖÜ][\p{L}'’-]*\.?(?:[ \t]+[A-ZÄÖÜ][\p{L}'’-]*\.?){0,2})/gu;
+  // "Fr." = Freitag nach diesen Wörtern; "Frau"/"Familie" = Nomen nach diesen Wörtern
+  var FRI_CTX = /(?:^|[^\p{L}])(?:am|seit|ab|vom|bis|jeden|letzten|n(?:ä|ae)chsten|diesen|kommenden)[ \t]*$|[-–][ \t]*$/iu;
+  // „meine Frau“, „unsere Familie“, „für die Familie“ = Nomen; „die Frau Klein“ bleibt eine Anrede (Name wird entfernt)
+  var NOUN_CTX = /(?:^|[^\p{L}])(?:meine[r]?|unsere[r]?)[ \t]*$/iu;
+  var NOUN_CTX_FAM = /(?:^|[^\p{L}])(?:meine[r]?|unsere[r]?|die|der|als|f(?:ü|ue)r)[ \t]*$/iu;
+  var FIELD_CHANNEL = /^(?:telefon|tel\.?|mobile?|handy|natel|e-?mail)$/i;   // Kanal, kein Kontaktdatum
+  // Beginn einer weitergeleiteten/zitierten Mail: Trennzeile oder "Am … schrieb …"
+  var FWD_SEP = /^\s*(?:-{2,}|_{4,}).*(?:original|urspr(?:ü|ue)ngliche|weitergeleitet|forwarded|message|nachricht)/i;
+  var FWD_AM = /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)/i;
+  // … als echte Kopfzeile (endet mit ":" oder enthält die Adresse), nicht "Am Montag schrieb die Kundin, dass …"
+  var FWD_HDR = /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)(?:[^.!?]*:\s*$|.*[<@])/i;
   var CLOSE_LINE = /^\s*(?:(?:mit\s+)?(?:freundliche[nrm]?|beste[n]?|liebe[n]?|herzliche[n]?|viele[n]?|sch(?:ö|oe)ne[n]?|sonnige[n]?|nette[n]?)\s+gr(?:ü|ue|u)(?:ss|ß)(?:e|en)?|gr(?:ü|ue|u)(?:ss|ß)(?:e|en|li)?|mfg|lg|vg|bg|beste\s+w(?:ü|ue)nsche|cordialement|meilleures\s+salutations|salutations|bien\s+(?:à|a)\s+vous|best\s+regards|kind\s+regards|regards)(?![\p{L}])/iu;
   // Dank, auch "Vielen Dank und liebe Grüsse" / "Danke und LG" (Gruppe 1 = Grussformel)
   var THANKS_HEAD = new RegExp("^\\s*(?:(?:vielen|herzlichen|besten|tausend)\\s+dank|danke(?:\\s+(?:sch(?:ö|oe)n|vielmals))?|merci(?:\\s+beaucoup)?)" +
@@ -225,11 +250,25 @@ var Engine = (function () {
 
   function words(s) { return (String(s).match(/[\p{L}\p{N}]+/gu) || []).length; }
   // Zeile wie aus einer Signatur: kein Wort mit Kleinbuchstaben am Anfang (Name, Adresse, Telefon …)
+  // Ausnahme: Notiz ganz in Grossbuchstaben ("FB NICHT ERH.", "RE DOPPELT"), mehr als die Hälfte der Wörter
+  // sind Abkürzungen oder bekannte Wörter
   function sigLike(s) {
     s = String(s).replace(/\S+@\S+|(?:https?:\/\/|www\.)\S+/gi, " ")
       .replace(/(^|[^\p{L}\p{N}])(?:von|van|de|der|den|di|da|du|zu|la|le|del|dos|und|y|c\/o)(?![\p{L}\p{N}])/gu, "$1");
-    return !/(?:^|[^\p{L}\p{N}])[a-zäöüß]/u.test(s);
+    if (/(?:^|[^\p{L}\p{N}])[a-zäöüß]/u.test(s)) return false;
+    if (/[a-zäöüß]/.test(s) || /\d{3}/.test(s)) return true;
+    var ws = s.match(/\p{L}{2,}/gu) || [], known = ws.filter(function (w) { return isAbk(w) || isVocab(w); }).length;
+    return !(ws.length >= 2 && known * 2 > ws.length);
   }
+  // Sieht der Text ab dieser Zeile wie eine Signatur aus? (Name, Adresse, Telefon, Grussformel, Gerätezeile,
+  // kurzer Name in Kleinbuchstaben; nichts mehr = ja)
+  function sigStart(l) {
+    if (l === undefined) return true;
+    if (sigLike(l) || DEVICE.test(l) || CLOSE_LINE.test(l) || THANKS_LINE.test(l) || /^\s*>/.test(l)) return true;
+    var ws = l.match(/[\p{L}\p{N}]+/gu) || [];
+    return ws.length <= 3 && !ws.some(function (w) { return isVocab(w) || isAbk(w); });
+  }
+  function nextLine(a, i) { for (var j = i + 1; j < a.length; j++) if (/\S/.test(a[j])) return a[j]; }
   // Grussformel-Zeile, vor der noch fast kein Text steht: nur Grussformel (evtl. mit Name) ->
   // ab hier Signatur. Reiner Dank ("Danke!") nur, wenn danach bloss noch Signaturzeilen kommen.
   function closeOnly(out, i) {
@@ -240,45 +279,64 @@ var Engine = (function () {
     if (!m) return false;
     var rest = l.slice(m[0].length), n;
     if (/^[\s,.!]*$/.test(rest)) return true;
-    // Name nach der Grussformel; "LG Fotobuch kaputt" oder "VG Rechnung" bleiben (bekannte Wörter)
+    // Name nach der Grussformel; "LG Fotobuch kaputt", "VG Rechnung" oder "VG RE" bleiben (bekannte Wörter, Abkürzungen)
     n = NAME_REST.exec(rest);
-    return !!n && !isVocab(n[1]) && !(n[2] && isVocab(n[2]));
+    return !!n && !isVocab(n[1]) && !isAbk(n[1]) && !(n[2] && (isVocab(n[2]) || isAbk(n[2])));
   }
 
   function clean(raw) {
     var removed = {}, t = String(raw || "").replace(/\r\n?/g, "\n");
-    var lines = t.split("\n"), out = [], bodyW = 0;
+    var lines = t.split("\n"), out = [], bodyW = 0, fwd = [];   // fwd: Stellen in out, an denen eine weitergeleitete Mail beginnt
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (/^\s*>/.test(line)) { removed["zitierte E-Mails"] = 1; continue; }
-      if (SIG_DASH.test(line)) { removed["Grussformel/Signatur"] = 1; break; }
+      if (SIG_DASH.test(line)) {
+        // "--" nach dem Text: ab hier Signatur; weit oben nur, wenn danach eine Signatur kommt (sonst nur die Zeile weg)
+        removed["Grussformel/Signatur"] = 1;
+        if (bodyW >= 6 || sigStart(nextLine(lines, i))) break;
+        continue;
+      }
       if (DEVICE.test(line)) { removed["Grussformel/Signatur"] = 1; continue; }
       var h = HEAD.exec(line);
       if (h) {
-        var key = h[1].toLowerCase();
-        if (bodyW >= 6 && (key === "von" || key === "from" || key === "de" || key === "gesendet" || key === "sent")) { removed["zitierte E-Mails"] = 1; break; }
+        var key = h[1].toLowerCase(), from = key === "von" || key === "from" || key === "de";
+        if (bodyW >= 6 && (from || key === "gesendet" || key === "sent")) { removed["zitierte E-Mails"] = 1; break; }
+        if (from) fwd.push(out.length);
         if ((key === "betreff" || key === "subject" || key === "objet") && bodyW < 6) {
           out.push(h[2].replace(/^\s*(?:(?:aw|re|wg|fw|fwd|tr)\s*:\s*)+/i, ""));
         }
         removed["E-Mail-Kopf"] = 1; continue;
       }
-      if (bodyW >= 6 && (/^\s*(?:-{2,}|_{4,}).*(?:original|urspr(?:ü|ue)ngliche|weitergeleitet|forwarded|message|nachricht)/i.test(line) ||
-          /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)/i.test(line))) { removed["zitierte E-Mails"] = 1; break; }
+      if (FWD_SEP.test(line) || FWD_AM.test(line)) {
+        if (bodyW >= 6) { removed["zitierte E-Mails"] = 1; break; }
+        // kurze Weiterleitung ("FYI", "Zur Info"): Kopfzeile weg (enthält oft den Absender), weiter mit der Mail
+        if (FWD_SEP.test(line) || FWD_HDR.test(line)) { removed["E-Mail-Kopf"] = 1; fwd.push(out.length); continue; }
+      }
       var fm = FIELD.exec(line);
       if (fm) {
-        // Formularfeld: kurzer Wert, Ziffern, @ oder Name -> weg; sonst ist es eine Notiz (ohne Bezeichnung behalten)
+        // Formularfeld: Kontaktdaten weg. Nur bei Telefon/E-Mail kann der Wert eine Notiz sein
+        // ("Telefon: Kundin sagt, FB nicht erhalten"): echter Satz -> ohne Bezeichnung behalten
         var val = line.slice(fm[0].length);
-        if (words(val) <= 4 || /[\d@]/.test(val) || sigLike(val)) { removed["Kontaktdaten"] = 1; continue; }
+        if (!FIELD_CHANNEL.test(fm[1]) || words(val) <= 4 || /[\d@]/.test(val) || sigLike(val)) { removed["Kontaktdaten"] = 1; continue; }
         line = val;
       }
       out.push(line);
       bodyW += words(line);
     }
     // Grussformel und Signatur (ab der Grusszeile alles weg)
-    var w = 0, th;
+    var w = 0, th, k;
+    function cut(from, n) { out.splice(from, n); fwd = fwd.map(function (x) { return x > from ? Math.max(from, x - n) : x; }); }
     for (i = 0; i < out.length; i++) {
       if (w >= 3 ? (CLOSE_LINE.test(out[i]) || THANKS_LINE.test(out[i]) || ((th = THANKS_HEAD.exec(out[i])) && th[1])) : closeOnly(out, i)) {
-        out = out.slice(0, i); removed["Grussformel/Signatur"] = 1; break;
+        removed["Grussformel/Signatur"] = 1;
+        if (w < 3) {
+          // kurze Weiterleitung ("FYI / LG Tom", dann die Mail): nur Gruss und Signatur bis zur Mail weg
+          k = fwd.filter(function (x) { return x > i; })[0];
+          if (k !== undefined) { cut(i, k - i); i--; continue; }
+          // Grussformel ganz oben, danach keine Signatur, sondern Text: nur diese Zeile weg
+          if (!sigStart(nextLine(out, i))) { cut(i, 1); i--; continue; }
+        }
+        out = out.slice(0, i); break;
       }
       w += words(out[i]);
     }
@@ -324,15 +382,24 @@ var Engine = (function () {
     strip(/(^|\s)\d{5,}(?=\s|$|[.,;:)])/g, "Daten/Nummern");
     strip(/(^|\s)\d{4}\s+[A-ZÄÖÜ][\p{L}-]+/gu, "Adressen");
     strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen");
-    // Namen nach einer Anrede (Frau Müller, Hr. Hans Meier): Anrede bleibt, bis zu 2 Namen weg,
-    // ein bekanntes Wort als 2. Wort bleibt ("Frau Meier Rechnung doppelt")
+    // Namen nach einer Anrede (Frau Müller, Hr. Hans Peter Meier, Frau Dr. Anna Meier): Anrede bleibt,
+    // Titel und bis zu 3 Namen weg. Das 1. Wort ist immer ein Name (auch "Frau Klein"), ausser es ist eine
+    // Abkürzung ("Hr. FB n. erh."); ab dem 2. Wort bleibt ein bekanntes Wort ("Frau Meier RE doppelt")
     n0 = t;
-    t = t.replace(/(^|[^\p{L}\p{N}])((?:Frau|Herrn?|Familie)[ \t]+|(?:Hr|Fr|Fam)\.[ \t]*)([A-ZÄÖÜ][\p{L}'’-]*\.?)(?:[ \t]+([A-ZÄÖÜ][\p{L}'’-]*))?/gu,
-      function (m0, pre, title, n1, n2, at, str) {
-        // "Mo-Fr." / "bis Fr.": Freitag, keine Anrede
-        if (title.indexOf("Fr.") === 0 && (/^[-–]$/.test(pre) || /bis\s*$/i.test(str.slice(Math.max(0, at - 5), at + pre.length)))) return m0;
-        return pre + title + (n2 && isVocab(n2) ? n2 : "");
-      });
+    t = t.replace(NAME_RE, function (m0, pre, title, dr, names, at, str) {
+      var parts = names.split(/([ \t]+)/), before = str.slice(Math.max(0, at - 30), at + pre.length);
+      if (isAbk(parts[0])) return m0;
+      // "am Fr. Paket erhalten", "Mo-Fr." (Freitag); "meine Frau Tasse …", "für die Familie Kalender …" (keine Anrede)
+      if (!dr && isVocab(parts[0]) && (/^Fr\./.test(title) && (/^[-–]$/.test(pre) || FRI_CTX.test(before)) ||
+          (/^Frau\s/.test(title) && NOUN_CTX.test(before)) || (/^Familie\s/.test(title) && NOUN_CTX_FAM.test(before)))) return m0;
+      for (var j = 0; j < parts.length; j += 2) {
+        var p = parts[j];
+        if (j && (isVocab(p) || isAbk(p))) return pre + title + parts.slice(j).join("");
+        // "Frau Meier. Paket fehlt": Satzende bleibt (Initialen wie "H." nicht)
+        if (/\p{L}{3,}\.$/u.test(p)) { var ti = title.replace(/[ \t]+$/, ""); return pre + ti + (/\.$/.test(ti) ? " ." : ".") + parts.slice(j + 1).join(""); }
+      }
+      return pre + title;
+    });
     if (t !== n0) removed["Namen"] = 1;
     t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
     return { text: t, removed: Object.keys(removed) };
@@ -752,6 +819,8 @@ var Engine = (function () {
     { id: "nurfaelle", name: "Nur importierte Fälle (ohne Stichwörter)", rules: false, agg: "max", w: EX_WEIGHT }
   ];
 
+  var PAIRED = ["gelernt", "gelernt_streng"];   // Varianten mit Paarvergleich gegen "regeln" (Bericht: pairs)
+
   function cmp(x, y) { return x < y ? -1 : x > y ? 1 : 0; }
   function partHit(p, w) { return p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1; }
   // Alle Wortteile der Regeln einer Klassifizierung (inkl. Bezeichnung und @Gruppen)
@@ -782,6 +851,8 @@ var Engine = (function () {
   // Näherung: die Wortgewichte (IDF) zählen alle Fälle mit (Abweichung zum exakten Test ~1 %).
   // opts: {maxTests: 3000, minDocs: 5, details: false}
   // Rückgabe: {step(ms) -> fertig?, progress() -> {phase, done, total}, result() -> Bericht}
+  // Bericht.pairs: {gelernt|gelernt_streng: {top1|top3: {fixed, broken}}} – Fälle, die mit der Variante neu
+  // richtig bzw. neu falsch sind (gegenüber "regeln"), für einen Vorzeichentest (nur Zahlen)
   function evaluation(cases, opts) {
     cases = cases || []; opts = opts || {};
     var maxTests = opts.maxTests || 3000, minDocs = opts.minDocs || 5;
@@ -790,7 +861,9 @@ var Engine = (function () {
     var codeN = {}, codeWords = {}, dfAll = Object.create(null);
     var baseItems = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true, key: norm(prepare(e.t).cleaned) }; });
     var baseIdx = makeIndex(baseItems), evalIdx = null, tests = [], every = 1;
-    var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [];
+    var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [], pairs = {};
+    // je Fall gegenüber "regeln": neu richtig (fixed) / neu falsch (broken), auf Platz 1 und unter den 3
+    PAIRED.forEach(function (id) { pairs[id] = { top1: { fixed: 0, broken: 0 }, top3: { fixed: 0, broken: 0 } }; });
     var details = opts.details ? [] : null, wordCodes = [], wordsOut = [], report = null;
     VARIANTS.forEach(function (v) { stats[v.id] = { id: v.id, name: v.name, n: 0, top1: 0, top3: 0, none: 0 }; });
 
@@ -810,11 +883,16 @@ var Engine = (function () {
       usable.push(u);
       keyN[u.key] = (keyN[u.key] || 0) + 1;
       codeN[c] = (codeN[c] || 0) + 1;
-      // Wörter direkt nach Frau/Herr/Kunde … sind wohl Namen ("Frau Muster", "Kd. Muster"); aus dem
-      // unbereinigten Text bestimmt, weil die Bereinigung Namen nach einer Anrede schon entfernt
+      // Wörter direkt nach Frau/Herr/Kd. … sind wohl Namen ("Frau Muster", "Kd. Muster"); aus dem
+      // unbereinigten Text (mit Gross-/Kleinschreibung) bestimmt, weil die Bereinigung manche Namen schon entfernt
       var cw = codeWords[c] || (codeWords[c] = Object.create(null)), seen = Object.create(null);
-      var rw = norm(expand(t).text).split(" "), names = Object.create(null);
-      for (var k = 1; k < rw.length; k++) if (NAMECUE[rw[k - 1]]) names[rw[k]] = 1;
+      var rt = t.match(/[\p{L}\p{N}]+/gu) || [], names = Object.create(null), up = /^\p{Lu}/u;
+      for (var k = 1; k < rt.length; k++) {
+        var cue = norm(rt[k - 1]);
+        if (!(NAMECUE[cue] || NAMECUE_K[cue]) || isVocab(rt[k]) || isAbk(rt[k])) continue;
+        if (NAMECUE_K[cue] && !up.test(rt[k]) && up.test(rt[k - 1])) continue;   // "Kunde storniert"
+        norm(rt[k]).split(" ").forEach(function (w) { names[w] = 1; });
+      }
       a.words.forEach(function (w) {
         if (seen[w] || w.length < 4 || /^\d+$/.test(w) || FILL[w] || SIMSTOP[w] || STOP[w] || names[w]) return;
         seen[w] = 1; cw[w] = (cw[w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1;
@@ -850,6 +928,11 @@ var Engine = (function () {
         if (!codes.length) s.none++;
         if (codes[0] === u.c) s.top1++;
         if (codes.indexOf(u.c) !== -1) s.top3++;
+      });
+      PAIRED.forEach(function (id) {
+        var p = pairs[id], r0 = top.regeln, r1 = top[id], a0 = r0.indexOf(u.c) !== -1, a1 = r1.indexOf(u.c) !== -1;
+        if (r1[0] === u.c && r0[0] !== u.c) p.top1.fixed++; else if (r0[0] === u.c && r1[0] !== u.c) p.top1.broken++;
+        if (a1 && !a0) p.top3.fixed++; else if (a0 && !a1) p.top3.broken++;
       });
       var pc = perCode[u.c] || (perCode[u.c] = { code: u.c, n: 0, regeln: { top1: 0, top3: 0 }, gelernt: { top1: 0, top3: 0 }, wrong: {} });
       pc.n++;
@@ -898,6 +981,7 @@ var Engine = (function () {
         total: cases.length, usable: usable.length, skipped: skipped, zuKurzZumLernen: zuKurz,
         sameText: sameText, nearDup: nearDup, tested: tests.length, sampleEvery: every,
         variants: VARIANTS.map(function (v) { var s = stats[v.id]; return { id: v.id, name: v.name, n: s.n, top1: s.top1, top3: s.top3, none: s.none }; }),
+        pairs: pairs,
         perCode: Object.keys(perCode).map(function (c) {
           var p = perCode[c];
           return { code: c, n: p.n, regeln: p.regeln, gelernt: p.gelernt,

@@ -882,8 +882,11 @@ var Engine = (function () {
     // Anhang-Hinweise und Grussformeln (sonst gelten z.B. "Siehe Anhang" oder Grüsse als Inhalt)
     "siehe anhang anbei beilage beigefuegt iphone freundliche freundlichen gruesse gruessen gruss");
 
-  // Nach diesen Wörtern folgt meist ein Name (zählt nicht für die Wortstatistik)
-  var NAMECUE = set("frau herr herrn hr fr familie fam kunde kundin name");
+  // Nach diesen Wörtern folgt oft ein Name (zählt nicht für die Wortstatistik): nach einer Anrede jedes
+  // unbekannte Wort; nach Kunde/Kd./Name nur ein unbekanntes Wort mit Grossbuchstaben ("Kd. Muster") oder alles
+  // klein geschrieben ("kd. muster"), nicht "Kunde storniert", "Kd. Farbstich", "Name falsch"
+  var NAMECUE = set("frau herr herrn hr fr familie fam");
+  var NAMECUE_K = set("kunde kundin kd kde kdin name");
 
   // Wörter, die zeigen, dass ein Satz das eigentliche Anliegen beschreibt
   var SIGNAL = set("leider aber jedoch trotzdem obwohl problem probleme reklamation reklamieren beanstandung fehler fehlerhaft " +
@@ -919,7 +922,13 @@ var Engine = (function () {
   }
 
   var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [], nLit = 0, nPart = 0;
-  var vocab = Object.create(null), vocabLong = [];
+  var vocab = Object.create(null), vocabLong = [], abkCS = Object.create(null), abkCI = Object.create(null);
+
+  // Interne Abkürzung aus ABK (FB, FBs, RE, GS … genau so geschrieben; kd., erh. … beliebig) – nie ein Name
+  function isAbk(tok) {
+    var w = String(tok || "").replace(/\.$/, ""), l = w.toLowerCase();
+    return !!(abkCS[w] || abkCS[w + "."] || abkCI[l] || abkCI[l + "."]);
+  }
 
   // Bekanntes Wort (Regeln, Füllwörter …), auch gebeugt oder als Anfang eines zusammengesetzten Wortes
   function isVocab(tok) {
@@ -1013,6 +1022,9 @@ var Engine = (function () {
     Object.keys(groups).forEach(function (g) { groups[g].forEach(function (l) { l.parts.forEach(function (p) { addV(p.w); }); }); });
     [STOP, FILL, SIMSTOP, SIGNAL].forEach(function (o) { Object.keys(o).forEach(addV); });
     if (ABK) Object.keys(ABK).forEach(function (k) { norm(ABK[k]).split(" ").forEach(addV); });
+    // Schlüssel der Abkürzungen: Grossbuchstaben (auch mit Plural-s, "FBs") genau, sonst ohne Gross-/Kleinschreibung
+    abkCS = Object.create(null); abkCI = Object.create(null);
+    if (ABK) Object.keys(ABK).forEach(function (k) { if (/^[A-ZÄÖÜ]{2,}s?\.?$/.test(k)) abkCS[k] = 1; else abkCI[k.toLowerCase()] = 1; });
 
     // Abkürzungen: nur Grossbuchstaben = Gross-/Kleinschreibung beachten
     if (ABK) Object.keys(ABK).sort(function (a, b) { return b.length - a.length; }).forEach(function (k) {
@@ -1032,6 +1044,19 @@ var Engine = (function () {
   // ------------------------------------------------------------------
   var HEAD = /^\s*(von|from|de|gesendet|sent|envoy[ée]|datum|date|an|to|à|cc|bcc|betreff|subject|objet)\s*:(.*)$/i;
   var FIELD = /^\s*(name|vorname|nachname|e-?mail|telefon|tel\.?|mobile?|handy|natel|adresse|strasse|straße|plz|ort|plz\s*\/\s*ort|land|kundennummer|kunden-?nr\.?|bestellnummer|bestell-?nr\.?|auftragsnummer|auftrags-?nr\.?|firma|unternehmen)\s*:/i;
+  // Anrede + akademischer Titel + bis zu 3 Wörter mit Grossbuchstaben
+  var NAME_RE = /(^|[^\p{L}\p{N}])((?:Frau|Herrn?|Familie)[ \t]+|(?:Hr|Fr|Fam)\.[ \t]*)((?:(?:Prof|Dr|Dipl)\.(?:[ \t]*-?[ \t]*(?:Ing|med|phil|iur|oec|rer\.[ \t]*nat|habil)\.)?[ \t]*)*)([A-ZÄÖÜ][\p{L}'’-]*\.?(?:[ \t]+[A-ZÄÖÜ][\p{L}'’-]*\.?){0,2})/gu;
+  // "Fr." = Freitag nach diesen Wörtern; "Frau"/"Familie" = Nomen nach diesen Wörtern
+  var FRI_CTX = /(?:^|[^\p{L}])(?:am|seit|ab|vom|bis|jeden|letzten|n(?:ä|ae)chsten|diesen|kommenden)[ \t]*$|[-–][ \t]*$/iu;
+  // „meine Frau“, „unsere Familie“, „für die Familie“ = Nomen; „die Frau Klein“ bleibt eine Anrede (Name wird entfernt)
+  var NOUN_CTX = /(?:^|[^\p{L}])(?:meine[r]?|unsere[r]?)[ \t]*$/iu;
+  var NOUN_CTX_FAM = /(?:^|[^\p{L}])(?:meine[r]?|unsere[r]?|die|der|als|f(?:ü|ue)r)[ \t]*$/iu;
+  var FIELD_CHANNEL = /^(?:telefon|tel\.?|mobile?|handy|natel|e-?mail)$/i;   // Kanal, kein Kontaktdatum
+  // Beginn einer weitergeleiteten/zitierten Mail: Trennzeile oder "Am … schrieb …"
+  var FWD_SEP = /^\s*(?:-{2,}|_{4,}).*(?:original|urspr(?:ü|ue)ngliche|weitergeleitet|forwarded|message|nachricht)/i;
+  var FWD_AM = /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)/i;
+  // … als echte Kopfzeile (endet mit ":" oder enthält die Adresse), nicht "Am Montag schrieb die Kundin, dass …"
+  var FWD_HDR = /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)(?:[^.!?]*:\s*$|.*[<@])/i;
   var CLOSE_LINE = /^\s*(?:(?:mit\s+)?(?:freundliche[nrm]?|beste[n]?|liebe[n]?|herzliche[n]?|viele[n]?|sch(?:ö|oe)ne[n]?|sonnige[n]?|nette[n]?)\s+gr(?:ü|ue|u)(?:ss|ß)(?:e|en)?|gr(?:ü|ue|u)(?:ss|ß)(?:e|en|li)?|mfg|lg|vg|bg|beste\s+w(?:ü|ue)nsche|cordialement|meilleures\s+salutations|salutations|bien\s+(?:à|a)\s+vous|best\s+regards|kind\s+regards|regards)(?![\p{L}])/iu;
   // Dank, auch "Vielen Dank und liebe Grüsse" / "Danke und LG" (Gruppe 1 = Grussformel)
   var THANKS_HEAD = new RegExp("^\\s*(?:(?:vielen|herzlichen|besten|tausend)\\s+dank|danke(?:\\s+(?:sch(?:ö|oe)n|vielmals))?|merci(?:\\s+beaucoup)?)" +
@@ -1063,11 +1088,25 @@ var Engine = (function () {
 
   function words(s) { return (String(s).match(/[\p{L}\p{N}]+/gu) || []).length; }
   // Zeile wie aus einer Signatur: kein Wort mit Kleinbuchstaben am Anfang (Name, Adresse, Telefon …)
+  // Ausnahme: Notiz ganz in Grossbuchstaben ("FB NICHT ERH.", "RE DOPPELT"), mehr als die Hälfte der Wörter
+  // sind Abkürzungen oder bekannte Wörter
   function sigLike(s) {
     s = String(s).replace(/\S+@\S+|(?:https?:\/\/|www\.)\S+/gi, " ")
       .replace(/(^|[^\p{L}\p{N}])(?:von|van|de|der|den|di|da|du|zu|la|le|del|dos|und|y|c\/o)(?![\p{L}\p{N}])/gu, "$1");
-    return !/(?:^|[^\p{L}\p{N}])[a-zäöüß]/u.test(s);
+    if (/(?:^|[^\p{L}\p{N}])[a-zäöüß]/u.test(s)) return false;
+    if (/[a-zäöüß]/.test(s) || /\d{3}/.test(s)) return true;
+    var ws = s.match(/\p{L}{2,}/gu) || [], known = ws.filter(function (w) { return isAbk(w) || isVocab(w); }).length;
+    return !(ws.length >= 2 && known * 2 > ws.length);
   }
+  // Sieht der Text ab dieser Zeile wie eine Signatur aus? (Name, Adresse, Telefon, Grussformel, Gerätezeile,
+  // kurzer Name in Kleinbuchstaben; nichts mehr = ja)
+  function sigStart(l) {
+    if (l === undefined) return true;
+    if (sigLike(l) || DEVICE.test(l) || CLOSE_LINE.test(l) || THANKS_LINE.test(l) || /^\s*>/.test(l)) return true;
+    var ws = l.match(/[\p{L}\p{N}]+/gu) || [];
+    return ws.length <= 3 && !ws.some(function (w) { return isVocab(w) || isAbk(w); });
+  }
+  function nextLine(a, i) { for (var j = i + 1; j < a.length; j++) if (/\S/.test(a[j])) return a[j]; }
   // Grussformel-Zeile, vor der noch fast kein Text steht: nur Grussformel (evtl. mit Name) ->
   // ab hier Signatur. Reiner Dank ("Danke!") nur, wenn danach bloss noch Signaturzeilen kommen.
   function closeOnly(out, i) {
@@ -1078,45 +1117,64 @@ var Engine = (function () {
     if (!m) return false;
     var rest = l.slice(m[0].length), n;
     if (/^[\s,.!]*$/.test(rest)) return true;
-    // Name nach der Grussformel; "LG Fotobuch kaputt" oder "VG Rechnung" bleiben (bekannte Wörter)
+    // Name nach der Grussformel; "LG Fotobuch kaputt", "VG Rechnung" oder "VG RE" bleiben (bekannte Wörter, Abkürzungen)
     n = NAME_REST.exec(rest);
-    return !!n && !isVocab(n[1]) && !(n[2] && isVocab(n[2]));
+    return !!n && !isVocab(n[1]) && !isAbk(n[1]) && !(n[2] && (isVocab(n[2]) || isAbk(n[2])));
   }
 
   function clean(raw) {
     var removed = {}, t = String(raw || "").replace(/\r\n?/g, "\n");
-    var lines = t.split("\n"), out = [], bodyW = 0;
+    var lines = t.split("\n"), out = [], bodyW = 0, fwd = [];   // fwd: Stellen in out, an denen eine weitergeleitete Mail beginnt
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (/^\s*>/.test(line)) { removed["zitierte E-Mails"] = 1; continue; }
-      if (SIG_DASH.test(line)) { removed["Grussformel/Signatur"] = 1; break; }
+      if (SIG_DASH.test(line)) {
+        // "--" nach dem Text: ab hier Signatur; weit oben nur, wenn danach eine Signatur kommt (sonst nur die Zeile weg)
+        removed["Grussformel/Signatur"] = 1;
+        if (bodyW >= 6 || sigStart(nextLine(lines, i))) break;
+        continue;
+      }
       if (DEVICE.test(line)) { removed["Grussformel/Signatur"] = 1; continue; }
       var h = HEAD.exec(line);
       if (h) {
-        var key = h[1].toLowerCase();
-        if (bodyW >= 6 && (key === "von" || key === "from" || key === "de" || key === "gesendet" || key === "sent")) { removed["zitierte E-Mails"] = 1; break; }
+        var key = h[1].toLowerCase(), from = key === "von" || key === "from" || key === "de";
+        if (bodyW >= 6 && (from || key === "gesendet" || key === "sent")) { removed["zitierte E-Mails"] = 1; break; }
+        if (from) fwd.push(out.length);
         if ((key === "betreff" || key === "subject" || key === "objet") && bodyW < 6) {
           out.push(h[2].replace(/^\s*(?:(?:aw|re|wg|fw|fwd|tr)\s*:\s*)+/i, ""));
         }
         removed["E-Mail-Kopf"] = 1; continue;
       }
-      if (bodyW >= 6 && (/^\s*(?:-{2,}|_{4,}).*(?:original|urspr(?:ü|ue)ngliche|weitergeleitet|forwarded|message|nachricht)/i.test(line) ||
-          /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)/i.test(line))) { removed["zitierte E-Mails"] = 1; break; }
+      if (FWD_SEP.test(line) || FWD_AM.test(line)) {
+        if (bodyW >= 6) { removed["zitierte E-Mails"] = 1; break; }
+        // kurze Weiterleitung ("FYI", "Zur Info"): Kopfzeile weg (enthält oft den Absender), weiter mit der Mail
+        if (FWD_SEP.test(line) || FWD_HDR.test(line)) { removed["E-Mail-Kopf"] = 1; fwd.push(out.length); continue; }
+      }
       var fm = FIELD.exec(line);
       if (fm) {
-        // Formularfeld: kurzer Wert, Ziffern, @ oder Name -> weg; sonst ist es eine Notiz (ohne Bezeichnung behalten)
+        // Formularfeld: Kontaktdaten weg. Nur bei Telefon/E-Mail kann der Wert eine Notiz sein
+        // ("Telefon: Kundin sagt, FB nicht erhalten"): echter Satz -> ohne Bezeichnung behalten
         var val = line.slice(fm[0].length);
-        if (words(val) <= 4 || /[\d@]/.test(val) || sigLike(val)) { removed["Kontaktdaten"] = 1; continue; }
+        if (!FIELD_CHANNEL.test(fm[1]) || words(val) <= 4 || /[\d@]/.test(val) || sigLike(val)) { removed["Kontaktdaten"] = 1; continue; }
         line = val;
       }
       out.push(line);
       bodyW += words(line);
     }
     // Grussformel und Signatur (ab der Grusszeile alles weg)
-    var w = 0, th;
+    var w = 0, th, k;
+    function cut(from, n) { out.splice(from, n); fwd = fwd.map(function (x) { return x > from ? Math.max(from, x - n) : x; }); }
     for (i = 0; i < out.length; i++) {
       if (w >= 3 ? (CLOSE_LINE.test(out[i]) || THANKS_LINE.test(out[i]) || ((th = THANKS_HEAD.exec(out[i])) && th[1])) : closeOnly(out, i)) {
-        out = out.slice(0, i); removed["Grussformel/Signatur"] = 1; break;
+        removed["Grussformel/Signatur"] = 1;
+        if (w < 3) {
+          // kurze Weiterleitung ("FYI / LG Tom", dann die Mail): nur Gruss und Signatur bis zur Mail weg
+          k = fwd.filter(function (x) { return x > i; })[0];
+          if (k !== undefined) { cut(i, k - i); i--; continue; }
+          // Grussformel ganz oben, danach keine Signatur, sondern Text: nur diese Zeile weg
+          if (!sigStart(nextLine(out, i))) { cut(i, 1); i--; continue; }
+        }
+        out = out.slice(0, i); break;
       }
       w += words(out[i]);
     }
@@ -1162,15 +1220,24 @@ var Engine = (function () {
     strip(/(^|\s)\d{5,}(?=\s|$|[.,;:)])/g, "Daten/Nummern");
     strip(/(^|\s)\d{4}\s+[A-ZÄÖÜ][\p{L}-]+/gu, "Adressen");
     strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen");
-    // Namen nach einer Anrede (Frau Müller, Hr. Hans Meier): Anrede bleibt, bis zu 2 Namen weg,
-    // ein bekanntes Wort als 2. Wort bleibt ("Frau Meier Rechnung doppelt")
+    // Namen nach einer Anrede (Frau Müller, Hr. Hans Peter Meier, Frau Dr. Anna Meier): Anrede bleibt,
+    // Titel und bis zu 3 Namen weg. Das 1. Wort ist immer ein Name (auch "Frau Klein"), ausser es ist eine
+    // Abkürzung ("Hr. FB n. erh."); ab dem 2. Wort bleibt ein bekanntes Wort ("Frau Meier RE doppelt")
     n0 = t;
-    t = t.replace(/(^|[^\p{L}\p{N}])((?:Frau|Herrn?|Familie)[ \t]+|(?:Hr|Fr|Fam)\.[ \t]*)([A-ZÄÖÜ][\p{L}'’-]*\.?)(?:[ \t]+([A-ZÄÖÜ][\p{L}'’-]*))?/gu,
-      function (m0, pre, title, n1, n2, at, str) {
-        // "Mo-Fr." / "bis Fr.": Freitag, keine Anrede
-        if (title.indexOf("Fr.") === 0 && (/^[-–]$/.test(pre) || /bis\s*$/i.test(str.slice(Math.max(0, at - 5), at + pre.length)))) return m0;
-        return pre + title + (n2 && isVocab(n2) ? n2 : "");
-      });
+    t = t.replace(NAME_RE, function (m0, pre, title, dr, names, at, str) {
+      var parts = names.split(/([ \t]+)/), before = str.slice(Math.max(0, at - 30), at + pre.length);
+      if (isAbk(parts[0])) return m0;
+      // "am Fr. Paket erhalten", "Mo-Fr." (Freitag); "meine Frau Tasse …", "für die Familie Kalender …" (keine Anrede)
+      if (!dr && isVocab(parts[0]) && (/^Fr\./.test(title) && (/^[-–]$/.test(pre) || FRI_CTX.test(before)) ||
+          (/^Frau\s/.test(title) && NOUN_CTX.test(before)) || (/^Familie\s/.test(title) && NOUN_CTX_FAM.test(before)))) return m0;
+      for (var j = 0; j < parts.length; j += 2) {
+        var p = parts[j];
+        if (j && (isVocab(p) || isAbk(p))) return pre + title + parts.slice(j).join("");
+        // "Frau Meier. Paket fehlt": Satzende bleibt (Initialen wie "H." nicht)
+        if (/\p{L}{3,}\.$/u.test(p)) { var ti = title.replace(/[ \t]+$/, ""); return pre + ti + (/\.$/.test(ti) ? " ." : ".") + parts.slice(j + 1).join(""); }
+      }
+      return pre + title;
+    });
     if (t !== n0) removed["Namen"] = 1;
     t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
     return { text: t, removed: Object.keys(removed) };
@@ -1590,6 +1657,8 @@ var Engine = (function () {
     { id: "nurfaelle", name: "Nur importierte Fälle (ohne Stichwörter)", rules: false, agg: "max", w: EX_WEIGHT }
   ];
 
+  var PAIRED = ["gelernt", "gelernt_streng"];   // Varianten mit Paarvergleich gegen "regeln" (Bericht: pairs)
+
   function cmp(x, y) { return x < y ? -1 : x > y ? 1 : 0; }
   function partHit(p, w) { return p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1; }
   // Alle Wortteile der Regeln einer Klassifizierung (inkl. Bezeichnung und @Gruppen)
@@ -1620,6 +1689,8 @@ var Engine = (function () {
   // Näherung: die Wortgewichte (IDF) zählen alle Fälle mit (Abweichung zum exakten Test ~1 %).
   // opts: {maxTests: 3000, minDocs: 5, details: false}
   // Rückgabe: {step(ms) -> fertig?, progress() -> {phase, done, total}, result() -> Bericht}
+  // Bericht.pairs: {gelernt|gelernt_streng: {top1|top3: {fixed, broken}}} – Fälle, die mit der Variante neu
+  // richtig bzw. neu falsch sind (gegenüber "regeln"), für einen Vorzeichentest (nur Zahlen)
   function evaluation(cases, opts) {
     cases = cases || []; opts = opts || {};
     var maxTests = opts.maxTests || 3000, minDocs = opts.minDocs || 5;
@@ -1628,7 +1699,9 @@ var Engine = (function () {
     var codeN = {}, codeWords = {}, dfAll = Object.create(null);
     var baseItems = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true, key: norm(prepare(e.t).cleaned) }; });
     var baseIdx = makeIndex(baseItems), evalIdx = null, tests = [], every = 1;
-    var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [];
+    var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [], pairs = {};
+    // je Fall gegenüber "regeln": neu richtig (fixed) / neu falsch (broken), auf Platz 1 und unter den 3
+    PAIRED.forEach(function (id) { pairs[id] = { top1: { fixed: 0, broken: 0 }, top3: { fixed: 0, broken: 0 } }; });
     var details = opts.details ? [] : null, wordCodes = [], wordsOut = [], report = null;
     VARIANTS.forEach(function (v) { stats[v.id] = { id: v.id, name: v.name, n: 0, top1: 0, top3: 0, none: 0 }; });
 
@@ -1648,11 +1721,16 @@ var Engine = (function () {
       usable.push(u);
       keyN[u.key] = (keyN[u.key] || 0) + 1;
       codeN[c] = (codeN[c] || 0) + 1;
-      // Wörter direkt nach Frau/Herr/Kunde … sind wohl Namen ("Frau Muster", "Kd. Muster"); aus dem
-      // unbereinigten Text bestimmt, weil die Bereinigung Namen nach einer Anrede schon entfernt
+      // Wörter direkt nach Frau/Herr/Kd. … sind wohl Namen ("Frau Muster", "Kd. Muster"); aus dem
+      // unbereinigten Text (mit Gross-/Kleinschreibung) bestimmt, weil die Bereinigung manche Namen schon entfernt
       var cw = codeWords[c] || (codeWords[c] = Object.create(null)), seen = Object.create(null);
-      var rw = norm(expand(t).text).split(" "), names = Object.create(null);
-      for (var k = 1; k < rw.length; k++) if (NAMECUE[rw[k - 1]]) names[rw[k]] = 1;
+      var rt = t.match(/[\p{L}\p{N}]+/gu) || [], names = Object.create(null), up = /^\p{Lu}/u;
+      for (var k = 1; k < rt.length; k++) {
+        var cue = norm(rt[k - 1]);
+        if (!(NAMECUE[cue] || NAMECUE_K[cue]) || isVocab(rt[k]) || isAbk(rt[k])) continue;
+        if (NAMECUE_K[cue] && !up.test(rt[k]) && up.test(rt[k - 1])) continue;   // "Kunde storniert"
+        norm(rt[k]).split(" ").forEach(function (w) { names[w] = 1; });
+      }
       a.words.forEach(function (w) {
         if (seen[w] || w.length < 4 || /^\d+$/.test(w) || FILL[w] || SIMSTOP[w] || STOP[w] || names[w]) return;
         seen[w] = 1; cw[w] = (cw[w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1;
@@ -1688,6 +1766,11 @@ var Engine = (function () {
         if (!codes.length) s.none++;
         if (codes[0] === u.c) s.top1++;
         if (codes.indexOf(u.c) !== -1) s.top3++;
+      });
+      PAIRED.forEach(function (id) {
+        var p = pairs[id], r0 = top.regeln, r1 = top[id], a0 = r0.indexOf(u.c) !== -1, a1 = r1.indexOf(u.c) !== -1;
+        if (r1[0] === u.c && r0[0] !== u.c) p.top1.fixed++; else if (r0[0] === u.c && r1[0] !== u.c) p.top1.broken++;
+        if (a1 && !a0) p.top3.fixed++; else if (a0 && !a1) p.top3.broken++;
       });
       var pc = perCode[u.c] || (perCode[u.c] = { code: u.c, n: 0, regeln: { top1: 0, top3: 0 }, gelernt: { top1: 0, top3: 0 }, wrong: {} });
       pc.n++;
@@ -1736,6 +1819,7 @@ var Engine = (function () {
         total: cases.length, usable: usable.length, skipped: skipped, zuKurzZumLernen: zuKurz,
         sameText: sameText, nearDup: nearDup, tested: tests.length, sampleEvery: every,
         variants: VARIANTS.map(function (v) { var s = stats[v.id]; return { id: v.id, name: v.name, n: s.n, top1: s.top1, top3: s.top3, none: s.none }; }),
+        pairs: pairs,
         perCode: Object.keys(perCode).map(function (c) {
           var p = perCode[c];
           return { code: c, n: p.n, regeln: p.regeln, gelernt: p.gelernt,
@@ -2163,15 +2247,22 @@ var Table = (function () {
     return n >= 5;
   }
   // Blatt wählen: opts.sheet (Index in names = sichtbare Blätter), sonst das erste mit Daten, sonst das erste.
+  // Mit opts.resolve (Code-Erkennung wie bei guess): zuerst das erste Blatt, auf dem guess eine Klassifizierung und
+  // eine Textspalte findet – nicht eine Übersicht oder Pivot-Tabelle ("Klassifizierung | Anzahl") davor.
   // load(k) liefert die Zeilen (oder ein Promise darauf)
   function pickSheet(names, load, opts) {
-    var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first;
+    var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first, data = null,
+      res = opts && typeof opts.resolve === "function" ? opts.resolve : null;
     function done(k, rows) { return { rows: rows, sheet: names[k], sheets: names, sheetIndex: k }; }
+    function cases(rows) { var g = guess(rows, res); return g.codeCol >= 0 && g.textCols.length > 0; }
     function next(k) {
       return Promise.resolve(load(k)).then(function (rows) {
         if (!k) first = rows;
-        if (hasData(rows)) return done(k, rows);
-        return k + 1 < names.length ? next(k + 1) : done(0, first);
+        if (hasData(rows)) {
+          if (!res || cases(rows)) return done(k, rows);
+          if (!data) data = { k: k, rows: rows };
+        }
+        return k + 1 < names.length ? next(k + 1) : data ? done(data.k, data.rows) : done(0, first);
       });
     }
     if (want >= 0 && want < names.length && want % 1 === 0) return Promise.resolve(load(want)).then(function (rows) { return done(want, rows); });
@@ -2252,7 +2343,8 @@ var Table = (function () {
   }
 
   // Datei lesen: .xlsx, Excel-2003-XML, HTML-Tabelle oder Text (CSV/TSV); altes .xls -> Fehler "XLS".
-  // opts.sheet = Index des Blattes in der gelieferten Liste sheets
+  // opts.sheet = Index des Blattes in der gelieferten Liste sheets; opts.resolve = Code-Erkennung (codeResolver),
+  // damit als Standard ein Blatt mit Fällen gewählt wird (s. pickSheet)
   function read(bytes, fileName, opts) {
     return new Promise(function (ok) {
       var u = bytesOf(bytes), text, d, m;
@@ -2298,7 +2390,16 @@ var Table = (function () {
     labels.sort(function (a, b) { return b.len - a.len; });
     function find(s) {
       var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, k, x, L, hit = null, tree;
-      s = s.trim().replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
+      s = s.trim();
+      // ganze Zelle eine Zahl mit "." / "," / NBSP als Tausendertrennzeichen ("10.211", "50,412", "50.410,00"): die ganze
+      // Zahl zählt; mit 1–2 Ziffern vorne nie ein Stück davon ("50.999" -> nichts statt 999; "50 412" mit gewöhnlichem
+      // Leerzeichen -> nichts statt 412). Mit 3 Ziffern vorne evtl. eine Liste ("511,517"), dann wie bisher
+      if ((m = /^(\d{1,3})([., \u00A0])(\d{3}(?:\2\d{3})*)(?:(?!\2)[.,]0+)?$/.exec(s))) {
+        v = m[1] + m[3].replace(/\D/g, "");
+        if (m[2] !== " " && known[v]) return v;
+        if (m[1].length < 3) return null;
+      }
+      s = s.replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
       while ((m = re.exec(s))) if (known[m[2]]) return m[2];
       v = norm(s);
       if (!v) return null;
@@ -2324,9 +2425,16 @@ var Table = (function () {
     };
   }
 
-  // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel sagt zugleich "Text" und die Zellen sind lang)
-  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent|kunde|kontakt|absender|\bvon\b|from|account|firma|link|\burls?\b|checksum|pr(ue|ü)fsumme|do not modify)/i;
-  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text|body|inhalt|mailtext|mail text|bemerkung|anmerkung|anfrage)/i;
+  // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel nennt zugleich eine Notiz, s. NOTEHEAD,
+  // oder sagt allgemein "Text" und die Zellen sind lang)
+  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent|kunde|kundin|customer|kontakt|contact|requester|auftraggeber|absender|\bvon\b|from|account|firma|link|\burls?\b|checksum|pr(ue|ü)fsumme|do not modify)/i;
+  // Titel einer Textspalte (auch weitere Textspalten neben dem Haupttext), s. textTitle
+  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text|body|inhalt|mailtext|mail text|bemerkung|anmerkung|anfrage|meldung|feedback|stichw)/i;
+  // Titel, der eine Notiz oder Nachricht nennt: nie wegen SKIP ausgeschlossen ("Notiz Agent", "Kundenanliegen", "Kundenmail");
+  // der Inhalt wird trotzdem geprüft (Adressen, Nummern, Links). "E-Mail" am Wortanfang ist eine Adresse ("Kunden-E-Mail")
+  var NOTEHEAD = /(notiz|note|bemerkung|anmerkung|kommentar|comment|beschreibung|description|nachricht|message|anliegen|anfrage|problem|meldung|feedback|stichw)/i;
+  function noteTitle(t) { return NOTEHEAD.test(t) || /mail/i.test(t) && !/\be-?mail/i.test(t); }
+  function textTitle(t) { return EXTRA.test(t) || noteTitle(t); }
   var CODEHEAD = /(klass|kateg|categ|class|code|grund|reason|typ|thema|topic)/i;
   var NUMERIC = /^[\d\s.,:\/+-]+$/;
   // Summenzeilen in gruppierten Berichten (in der Spalte Klassifizierung)
@@ -2335,16 +2443,27 @@ var Table = (function () {
   var JUNK = /^(https?:\/\/|www\.)|^[{(]?[0-9a-f]{8}(-?[0-9a-f]{4}){3}-?[0-9a-f]{12}[)}]?$|^(?=\S*\d)(?=\S*[a-z])[A-Za-z0-9+\/_=-]{16,}$/i;
   function words(v) { return v.split(/\s+/).length; }
   function subtotal(v) { return SUBTOTAL.test(v); }
+  // einzelnes Wort, das nach Kennung aussieht (Ziffern, @, _, :, Punkt im Wort, sehr lang); "Storno" oder "Rekla." nicht
+  function oddToken(v) { return v.length > 25 || /[\d@_:]|\.\S/.test(v) || JUNK.test(v); }
+  function distinct(r) {   // verschiedene gefüllte Werte einer Zeile
+    var seen = Object.create(null), cnt = 0;
+    r.forEach(function (x) { x = str(x).trim(); if (x && !seen[x]) { seen[x] = 1; cnt++; } });
+    return cnt;
+  }
 
   // Kopfzeile, Spalte mit der Klassifizierung, Textspalten, Gruppen ohne Code in jeder Zeile?
-  function guess(rows, resolve) {
+  // opts.headerRow (Zahl, -1 = keine Kopfzeile): Kopfzeile vorgegeben (Auswahl in der Oberfläche); Klassifizierung,
+  // Textspalten und fillDown werden dafür neu erraten.
+  function guess(rows, resolve, opts) {
     rows = rows || [];
-    var n = rows.length, w = 0, top = Math.min(n, 315), codeCol = -1, best = 0, headerRow = -1, first = -1, hc = [],
-      sample = [], stats = [], main = -1, cand = [], textCols, fillDown = false, i, j, k, v, s, ne, ok, tn, te, any;
+    var fixed = opts && opts.headerRow != null && opts.headerRow !== "" && isFinite(opts.headerRow) ? Math.floor(+opts.headerRow) : null;
+    var n = rows.length, w = 0, codeCol = -1, best = 0, first = -1, hc = [], tries = [], res = null, from, top, i, j, k, v, s, ne, ok;
+    if (fixed != null && !(fixed >= 0 && fixed < n)) fixed = -1;
+    from = fixed != null ? fixed + 1 : 0; top = Math.min(n, from + 315);
     rows.forEach(function (r) { if (r.length > w) w = r.length; });
     // 1. Klassifizierung: grösster Anteil auflösbarer Werte (mindestens 30 %, ohne Summenzeilen)
     for (j = 0; j < w; j++) {
-      for (i = ne = ok = 0; i < top; i++) {
+      for (i = from, ne = ok = 0; i < top; i++) {
         v = cell(rows[i], j).trim();
         if (!v || subtotal(v)) continue;
         ne++; if (resolve(v)) ok++;
@@ -2352,7 +2471,10 @@ var Table = (function () {
       if (ne && ok / ne >= 0.3 && ok / ne > best) { best = ok / ne; codeCol = j; }
     }
     // 2. Kopfzeile: letzte Zeile vor dem ersten gültigen Code (in den ersten 15), deren Code-Zelle Text ist;
-    //    Titel- und Filterzeilen darüber zählen nicht. Bevorzugt eine Zeile, die wie Spaltentitel aussieht.
+    //    Titel- und Filterzeilen darüber zählen nicht. Punkte: sieht wie Spaltentitel aus (2, wenn die Code-Zelle wie
+    //    "Klassifizierung" lautet), dann Anzahl Zellen mit einem bekannten Titelwort. So verliert ein offener Fall
+    //    ("Kunde ruft wegen Lieferung zurück | nicht klassifiziert") gegen "Notiz | Klassifizierung". Bei Gleichstand
+    //    die unterste zuerst, aber nur, wenn es damit eine Textspalte gibt.
     function headerLike(r) {   // mindestens 2 kurze, verschiedene, nicht numerische Zellen
       var seen = Object.create(null), cnt = 0, x, y;
       for (x = 0; x < w; x++) {
@@ -2363,7 +2485,15 @@ var Table = (function () {
       }
       return cnt >= 2;
     }
-    if (codeCol >= 0) {
+    function titleCells(r) {   // kurze Zellen mit Titelwort ("Notiz", "Kundenname", "Klassifizierung")
+      for (var x = 0, cnt = 0, y; x < w; x++) {
+        y = cell(rows[r], x).trim();
+        if (y && words(y) <= 3 && (SKIP.test(y) || textTitle(y) || CODEHEAD.test(y))) cnt++;
+      }
+      return cnt;
+    }
+    if (fixed != null) tries = [fixed];
+    else if (codeCol >= 0) {
       for (i = 0; i < Math.min(n, 16) && first < 0; i++) {
         v = cell(rows[i], codeCol).trim();
         if (v && !subtotal(v) && resolve(v)) first = i;
@@ -2371,54 +2501,91 @@ var Table = (function () {
       }
       if (first >= 0 && hc.length) {
         for (k = -1, i = 0; i < hc.length; i++) {
-          s = headerLike(hc[i]) ? (CODEHEAD.test(cell(rows[hc[i]], codeCol)) ? 2 : 1) : 0;
-          if (s >= k) { k = s; headerRow = hc[i]; }
+          s = headerLike(hc[i]) ? (CODEHEAD.test(cell(rows[hc[i]], codeCol)) ? 2 : 1) * 1000 + titleCells(hc[i]) : 0;
+          if (s > k) { k = s; tries = []; }
+          if (s === k) tries.unshift(hc[i]);
         }
       } else {
         v = cell(rows[0], codeCol).trim();
-        headerRow = v && !NUMERIC.test(v) && !resolve(v) ? 0 : -1;
+        tries = [v && !NUMERIC.test(v) && !resolve(v) ? 0 : -1];
       }
-    } else headerRow = n > 1 && headerLike(0) ? 0 : -1;
-    // 3. Datenzeilen (ohne Summenzeilen) auswerten
-    for (i = headerRow + 1; i < n && sample.length < 300; i++) if (codeCol < 0 || !subtotal(cell(rows[i], codeCol))) sample.push(rows[i]);
-    for (j = 0; j < w; j++) {
-      s = { ne: 0, ok: 0, len: 0, words: 0, num: 0, one: 0, junk: 0 };
-      for (i = 0; i < sample.length; i++) {
-        v = cell(sample[i], j).trim();
-        if (!v) continue;
-        k = words(v);
-        s.ne++; s.len += v.length; s.words += k;
-        if (resolve(v)) s.ok++;
-        if (NUMERIC.test(v)) s.num++;
-        if (k === 1) s.one++;
-        if (JUNK.test(v) || k <= 4 && v.indexOf("@") >= 0) s.junk++;
+    } else tries = [n > 1 && headerLike(0) ? 0 : -1];
+    for (i = 0; i < tries.length && !(res && res.textCols.length); i++) {
+      s = columns(tries[i]);
+      if (!res || s.textCols.length) res = s;
+    }
+
+    // 3.+4. Datenzeilen nach der Kopfzeile hr (ohne Summenzeilen) auswerten, Textspalten wählen
+    function columns(hr) {
+      var sample = [], stats = [], main = -1, cand = [], x, y, st, kk;
+      function title(z) { var t = hr >= 0 ? cell(rows[hr], z).trim() : ""; return t.length <= 40 ? t : ""; }
+      function better(a, b) {   // mehr Wörter × Füllgrad; bei Gleichstand längere Zellen
+        return b < 0 || stats[a].score > stats[b].score + 1e-9 || stats[a].score > stats[b].score - 1e-9 && stats[a].avg > stats[b].avg;
       }
-      s.frac = s.ne ? s.ok / s.ne : 0; s.avg = s.ne ? s.len / s.ne : 0;
-      s.score = s.ne ? s.ne / sample.length * s.words / s.ne : 0;   // Füllgrad × Wörter pro Zelle
-      stats.push(s);
+      for (x = hr + 1; x < n && sample.length < 300; x++) if (codeCol < 0 || !subtotal(cell(rows[x], codeCol))) sample.push(rows[x]);
+      for (y = 0; y < w; y++) {
+        st = { ne: 0, ok: 0, len: 0, words: 0, num: 0, one: 0, odd: 0, junk: 0, vals: Object.create(null), nv: 0 };
+        for (x = 0; x < sample.length; x++) {
+          v = cell(sample[x], y).trim();
+          if (!v) continue;
+          kk = words(v);
+          st.ne++; st.len += v.length; st.words += kk;
+          if (resolve(v)) st.ok++;
+          if (NUMERIC.test(v)) st.num++;
+          if (kk === 1) { st.one++; if (oddToken(v)) st.odd++; }
+          if (st.nv <= 5 && !st.vals[v]) { st.vals[v] = 1; st.nv++; }   // verschiedene Werte (nur bis 6 gezählt)
+          if (JUNK.test(v) || kk <= 4 && v.indexOf("@") >= 0) st.junk++;
+        }
+        st.frac = st.ne ? st.ok / st.ne : 0; st.avg = st.ne ? st.len / st.ne : 0;
+        st.score = st.ne ? st.ne / sample.length * st.words / st.ne : 0;   // Füllgrad × Wörter pro Zelle
+        stats.push(st);
+      }
+      // Haupttext = meiste Wörter (bei mindestens 30 % gefüllten Zeilen), auch Stichwort-Notizen aus einem Wort
+      // ("Lieferverzug", "Storno"), aber keine Kennungen und keine Auswahl mit höchstens 5 Werten (Kanal, Priorität);
+      // dazu weitere Spalten mit Text-Titel und meist mehreren Wörtern
+      for (y = 0; y < w; y++) {
+        st = stats[y];
+        if (y === codeCol || !st.ne || st.frac >= 0.3 || st.num > st.ne * 0.5 || st.odd > st.ne * 0.7 || st.junk > st.ne * 0.3) continue;
+        if (SKIP.test(title(y)) && !noteTitle(title(y)) && !(EXTRA.test(title(y)) && st.avg >= 20)) continue;
+        cand.push(y);
+        if (st.ne >= 0.3 * sample.length && !(st.one > st.ne * 0.7 && st.nv <= 5 && st.ne >= 10) && better(y, main)) main = y;
+      }
+      return { headerRow: hr, textCols: main < 0 ? [] : cand.filter(function (z) {
+        return z === main || hr >= 0 && textTitle(title(z)) && stats[z].avg >= 5 && stats[z].one <= stats[z].ne * 0.7;
+      }) };
     }
-    // 4. Textspalten: Haupttext = meiste Wörter (bei mindestens 30 % gefüllten Zeilen), dazu Spalten mit Text-Titel
-    function title(x) { var t = headerRow >= 0 ? cell(rows[headerRow], x).trim() : ""; return t.length <= 40 ? t : ""; }
-    for (j = 0; j < w; j++) {
-      s = stats[j];
-      if (j === codeCol || !s.ne || s.frac >= 0.3 || s.num > s.ne * 0.5 || s.one > s.ne * 0.7 || s.junk > s.ne * 0.3) continue;
-      if (SKIP.test(title(j)) && !(EXTRA.test(title(j)) && s.avg >= 20)) continue;
-      cand.push(j);
-      if (s.ne >= 0.3 * sample.length && s.words >= 1.5 * s.ne && (main < 0 || s.score > stats[main].score)) main = j;
+
+    // 5. Gruppierter Bericht (Klassifizierung nur in der ersten Zeile der Gruppe, darunter leer)? Nur wenn
+    //    (a) mindestens 3 Gruppenzeilen (Code ohne Text), meist mit Fällen ohne Code darunter, und die meisten
+    //        Fälle ohne Code stehen unter einer Gruppenzeile, oder
+    //    (b) jede Klassifizierung ein Block: Codes fast alle verschieden (höchstens 5 % Wiederholungen; Summenzeilen und
+    //        Zwischentitel wie "Januar" beginnen einen neuen Abschnitt), die Fälle ohne Code stehen unter einem Code, in
+    //        mindestens 2 Blöcken. (Mit 20 % Wiederholungen würden kleine flache Listen mit vielen Codes noch gefüllt.)
+    //    Eine flache Liste mit vielen offenen Fällen (Codes wiederholt, Lücken verstreut) bekommt kein fillDown.
+    function grouped(hr, cols) {
+      var seen = Object.create(null), head = "", inRun = false, cnt = 0, codes = 0, rep = 0, heads = 0, fed = 0, tn = 0, te = 0,
+        underHead = 0, underCode = 0, runs = 0, x, r, c, rc, t;
+      function hasText(z) { return !blank(cell(r, z)); }
+      for (x = hr + 1; x < n && cnt < 300; x++) {
+        r = rows[x]; c = cell(r, codeCol).trim(); t = cols.some(hasText);
+        if (c && subtotal(c)) { seen = Object.create(null); head = ""; continue; }
+        cnt++;
+        if (!c && !t) { if (distinct(r) <= 1) seen = Object.create(null); continue; }
+        if (c) {
+          rc = resolve(c); head = rc ? (t ? "c" : "g") : ""; inRun = false;
+          if (rc) { codes++; if (seen[rc]) rep++; seen[rc] = 1; if (!t) heads++; }
+          if (t) tn++;
+          continue;
+        }
+        tn++; te++;
+        if (head === "g") { underHead++; if (!inRun) fed++; } else if (head === "c") underCode++;
+        if (head && !inRun) { runs++; inRun = true; }
+      }
+      return codes > 0 && te >= 0.3 * tn && (heads >= 3 && fed >= 0.7 * heads && underHead >= 0.6 * te ||
+        rep <= Math.max(1, 0.05 * codes) && underHead + underCode > 0.5 * te && runs >= 2);
     }
-    textCols = main < 0 ? [] : cand.filter(function (x) { return x === main || headerRow >= 0 && EXTRA.test(title(x)) && stats[x].avg >= 5; });
-    // 5. Gruppierter Bericht: Klassifizierung nur in der ersten Zeile der Gruppe, darunter leer
-    if (codeCol >= 0 && textCols.length) {
-      tn = te = 0; any = false;
-      sample.forEach(function (r) {
-        var c = cell(r, codeCol).trim();
-        if (c && resolve(c)) any = true;
-        if (!textCols.some(function (x) { return !blank(cell(r, x)); })) return;
-        tn++; if (!c) te++;
-      });
-      fillDown = any && tn > 0 && te >= 0.3 * tn;
-    }
-    return { headerRow: headerRow, codeCol: codeCol, textCols: textCols, fillDown: fillDown };
+    return { headerRow: res.headerRow, codeCol: codeCol, textCols: res.textCols,
+      fillDown: codeCol >= 0 && res.textCols.length > 0 && grouped(res.headerRow, res.textCols) };
   }
 
   // Zeilen nach der Kopfzeile -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code, ohne Text,
@@ -2936,7 +3103,7 @@ var Table = (function () {
   }
   function openFile(sheet) {
     impError("");
-    return Table.read(imp.bytes, imp.name, sheet === undefined ? undefined : { sheet: sheet }).then(function (res) {
+    return Table.read(imp.bytes, imp.name, { sheet: sheet, resolve: resolveCode }).then(function (res) {
       imp.sheets = res.sheets && res.sheets.length ? res.sheets : null;
       imp.sheetIndex = res.sheetIndex || 0;
       renderSheets();

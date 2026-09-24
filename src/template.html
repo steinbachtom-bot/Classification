@@ -841,7 +841,7 @@
   }
   function openFile(sheet) {
     impError("");
-    return Table.read(imp.bytes, imp.name, sheet === undefined ? undefined : { sheet: sheet }).then(function (res) {
+    return Table.read(imp.bytes, imp.name, { sheet: sheet, resolve: resolveCode }).then(function (res) {
       imp.sheets = res.sheets && res.sheets.length ? res.sheets : null;
       imp.sheetIndex = res.sheetIndex || 0;
       renderSheets();
