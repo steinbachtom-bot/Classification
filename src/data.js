@@ -458,7 +458,10 @@ var ABK = {
   "rekla.": "Reklamation", "reklam.": "Reklamation", "stornierg.": "Stornierung", "adr.": "Adresse",
   "zahlg.": "Zahlung", "rückerst.": "Rückerstattung", "sdg.": "Sendung", "pak.": "Paket",
   "prod.": "Produktion", "qual.": "Qualität", "bestät.": "Bestätigung", "tel.": "Telefon",
-  "bzgl.": "bezüglich", "wg.": "wegen"
+  "bzgl.": "bezüglich", "wg.": "wegen",
+  // aus echten Notizen (September 2026): KD, AT, RG kommen am häufigsten vor
+  "RG": "Rechnung", "RGs": "Rechnungen", "Rg.": "Rechnung", "AT": "Auftrag", "ATs": "Aufträge", "AT-Nr.": "Auftragsnummer",
+  "DB": "Doppelbestellung", "GU": "Gutschein", "CC": "Kreditkarte", "PB": "Fotobuch", "CL": "Kunde"
 };
 
 /* Fest eingebaute Beispiele (Text -> Code), gelten für alle, die diese Datei nutzen.

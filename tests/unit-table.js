@@ -623,10 +623,25 @@ check('T14: toCases meldet Textspalten, in denen oft ein Code steht', () => {
   const rows = table(['Notiz', 'Code', 'Bezeichnung'], 20, i => [MAILS[i % 4], CODES4[i % 4], E.byCode[CODES4[i % 4]].label]);
   const r = T.toCases(rows, { headerRow: 0, codeCol: 1, textCols: [0, 2] }, resolve);
   eq(r.textColsWithCodes, [2]);
-  eq(r.cases[0].t, MAILS[0] + '\n' + E.byCode[CODES4[0]].label);
+  // die Bezeichnung selbst würde die Lösung verraten: sie wird weggelassen und gezählt
+  eq(r.cases[0].t, MAILS[0]);
+  eq(r.labelCells, 20);
   eq(T.toCases(rows, { headerRow: 0, codeCol: 1, textCols: [0] }, resolve).textColsWithCodes, []);
   // gleicher Text in zwei Spalten nur einmal
   eq(T.toCases([['a', 'b', 'c'], ['Tasse kaputt', 'Tasse kaputt', '517']], { headerRow: 0, codeCol: 2, textCols: [0, 1] }, resolve).cases[0].t, 'Tasse kaputt');
+});
+
+check('T21: kurze Titel, die nur eine Klassifizierung nennen, werden weggelassen – echte Titel bleiben', () => {
+  const rows = [['Titel', 'Beschreibung', 'Betreff'],
+    ['Adressänderung', 'Neu: Musterweg 1', '6102 - Adressänderung'],
+    ['Lieferverzögerung', 'Buch noch nicht da', '50410 - Lieferverzögerung'],
+    ['Anruf wegen Paket', 'Buch noch nicht da', '50410 - Lieferverzögerung'],
+    ['Adresse 6102 Malters', 'PLZ ist kein Code', '6102 - Adressänderung']];
+  const r = T.toCases(rows, { headerRow: 0, codeCol: 2, textCols: [0, 1] }, resolve);
+  eq(r.labelCells, 2);
+  eq(r.cases.map(c => c.t), ['Neu: Musterweg 1', 'Buch noch nicht da', 'Anruf wegen Paket\nBuch noch nicht da', 'Adresse 6102 Malters\nPLZ ist kein Code']);
+  eq(resolve.label('Lieferverzögerung'), '50410');
+  eq(resolve.label('50410'), null);
 });
 
 /* ---------- Korrekturen nach der zweiten Durchsicht (T15–T20); alle Daten erfunden ---------- */

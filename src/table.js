@@ -517,9 +517,10 @@ var Table = (function () {
       });
     });
     labels.sort(function (a, b) { return b.len - a.len; });
-    function find(s) {
+    function find(s, labelOnly) {
       var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, k, x, L, hit = null, tree;
       s = s.trim();
+      if (!labelOnly) {
       // ganze Zelle eine Zahl mit "." / "," / NBSP als Tausendertrennzeichen ("10.211", "50,412", "50.410,00"): die ganze
       // Zahl zählt; mit 1–2 Ziffern vorne nie ein Stück davon ("50.999" -> nichts statt 999; "50 412" mit gewöhnlichem
       // Leerzeichen -> nichts statt 412). Mit 3 Ziffern vorne evtl. eine Liste ("511,517"), dann wie bisher
@@ -530,6 +531,7 @@ var Table = (function () {
       }
       s = s.replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
       while ((m = re.exec(s))) if (known[m[2]]) return m[2];
+      }
       v = norm(s);
       if (!v) return null;
       if (exact[v] && exact[v] !== "?") return exact[v];
@@ -547,11 +549,14 @@ var Table = (function () {
       }
       return hit ? hit.code : null;
     }
-    return function (value) {
+    var fn = function (value) {
       if (value == null) return null;
       var k = String(value);
       return k in memo ? memo[k] : (memo[k] = find(k));
     };
+    // nur über die Bezeichnung (ohne Zahlen): erkennt Textzellen, die selbst eine Klassifizierung sind (z.B. Titel „Adressänderung“)
+    fn.label = function (value) { return value == null ? null : find(String(value), true); };
+    return fn;
   }
 
   // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel nennt zugleich eine Notiz, s. NOTEHEAD,
@@ -722,7 +727,7 @@ var Table = (function () {
   // Zeilen nach der Kopfzeile -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code, ohne Text,
   // Summenzeile oder (bei fillDown) Gruppenzeile. fillDown: leere Klassifizierung = die letzte darüber (bis zur Summenzeile)
   function toCases(rows, cfg, resolve) {
-    var out = { cases: [], total: 0, noCode: 0, noText: 0, subtotal: 0, groupRows: 0, filled: 0, unknown: [], textColsWithCodes: [] };
+    var out = { cases: [], total: 0, noCode: 0, noText: 0, subtotal: 0, groupRows: 0, filled: 0, labelCells: 0, unknown: [], textColsWithCodes: [] };
     var unk = Object.create(null), order = [], cols = cfg.textCols || [], codeCol = cfg.codeCol == null ? -1 : cfg.codeCol;
     var hr = cfg.headerRow != null ? +cfg.headerRow : cfg.header ? 0 : -1, fill = !!cfg.fillDown && codeCol >= 0, last = null;
     var tc = cols.map(function () { return { ne: 0, ok: 0 }; }), lines, i, j, v, c, t, x, filled;
@@ -739,8 +744,10 @@ var Table = (function () {
       for (j = 0; j < cols.length; j++) {
         x = cell(rows[i], cols[j]).trim();
         if (!x) continue;
-        if (t.indexOf(x) < 0) t.push(x);   // gleicher Text in zwei Spalten nur einmal
         if (tc[j].ne < 500) { tc[j].ne++; if (resolve(x)) tc[j].ok++; }
+        // eine kurze Zelle, die nur eine Klassifizierung nennt (Titel „Adressänderung“), verrät die Lösung: weglassen
+        if (resolve.label && x.split(/\s+/).length <= 8 && resolve.label(x)) { out.labelCells++; continue; }
+        if (t.indexOf(x) < 0) t.push(x);   // gleicher Text in zwei Spalten nur einmal
       }
       if (!c) {
         out.noCode++;

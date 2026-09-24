@@ -810,6 +810,8 @@
     if (r.noText) html += " · " + fmt(r.noText) + " ohne Text";
     if (r.subtotal) html += " · " + nf(r.subtotal, "Summenzeile", "Summenzeilen");
     if (r.groupRows) html += " · " + nf(r.groupRows, "Gruppenzeile", "Gruppenzeilen");
+    if (r.labelCells) html += "<br>" + (r.labelCells === 1 ? "1 Textzelle nannte" : fmt(r.labelCells) + " Textzellen nannten") +
+      " nur die Klassifizierung selbst (z.B. ein Titel wie „Adressänderung“) und " + (r.labelCells === 1 ? "wurde" : "wurden") + " weggelassen – sonst wäre der Test zu gut.";
     if (r.filled) html += "<br>" + (r.filled === 1 ? "1 Fall hat" : fmt(r.filled) + " Fälle haben") + " die Klassifizierung aus der Zeile darüber" +
       (imp.cfg.fillDown ? " (Häkchen oben – bei einer einfachen Liste ausschalten)." : ".");
     if (!r.cases.length && imp.sheets && imp.sheets.length > 1) html += "<br>Dieses Blatt enthält keine Fälle? Oben unter „Blatt“ ein anderes wählen.";
@@ -1065,7 +1067,7 @@
       app: "Fall-Klassifizierung", typ: "Auswertung", version: 2, erstellt: new Date().toISOString().slice(0, 10),
       hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes und Stichwort-Regeln" + (words ? " sowie ausgewählte Wörter aus mindestens 5 Fällen" : "") + ".",
       quelle: { format: imp.format, zeilen: res.total, faelle: res.cases.length, ohneCode: res.noCode, ohneText: res.noText,
-        summenzeilen: res.subtotal || 0, ausZeileDarueber: res.filled || 0,
+        summenzeilen: res.subtotal || 0, ausZeileDarueber: res.filled || 0, nurKlassifizierungImText: res.labelCells || 0,
         nichtErkannteCodes: codeLike.map(function (u) { return [String(u[0]).match(/\d{3,5}/)[0], u[1]]; }) },
       test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped,
         zuKurzZumLernen: r.zuKurzZumLernen, gleicherText: r.sameText, fastGleicherText: r.nearDup, veraenderteFaelle: r.pairs },

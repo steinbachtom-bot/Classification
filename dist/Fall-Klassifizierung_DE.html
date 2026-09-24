@@ -829,7 +829,10 @@ var ABK = {
   "rekla.": "Reklamation", "reklam.": "Reklamation", "stornierg.": "Stornierung", "adr.": "Adresse",
   "zahlg.": "Zahlung", "rückerst.": "Rückerstattung", "sdg.": "Sendung", "pak.": "Paket",
   "prod.": "Produktion", "qual.": "Qualität", "bestät.": "Bestätigung", "tel.": "Telefon",
-  "bzgl.": "bezüglich", "wg.": "wegen"
+  "bzgl.": "bezüglich", "wg.": "wegen",
+  // aus echten Notizen (September 2026): KD, AT, RG kommen am häufigsten vor
+  "RG": "Rechnung", "RGs": "Rechnungen", "Rg.": "Rechnung", "AT": "Auftrag", "ATs": "Aufträge", "AT-Nr.": "Auftragsnummer",
+  "DB": "Doppelbestellung", "GU": "Gutschein", "CC": "Kreditkarte", "PB": "Fotobuch", "CL": "Kunde"
 };
 
 /* Fest eingebaute Beispiele (Text -> Code), gelten für alle, die diese Datei nutzen.
@@ -1206,7 +1209,7 @@ var Engine = (function () {
       if (re.test(t)) { re.lastIndex = 0; t = t.replace(re, " "); removed["Höflichkeitsfloskeln"] = 1; }
     });
     // Kontaktdaten und Nummern
-    function strip(re, what) { var n = t.replace(re, " "); if (n !== t) { removed[what] = 1; t = n; } }
+    function strip(re, what, by) { var n = t.replace(re, by || " "); if (n !== t) { removed[what] = 1; t = n; } }
     strip(/[\w.+-]{1,64}@[\w-]+\.[\w.-]+/g, "E-Mail-Adressen");   // {1,64}: sonst sehr langsam bei langen Wörtern
     strip(/(?:https?:\/\/|www\.)\S+/gi, "Links");
     // IBAN (mit/ohne Leerzeichen, alle Länder) und Kartennummern in 4er-Gruppen
@@ -1225,8 +1228,12 @@ var Engine = (function () {
     if (t !== n0) removed["Daten/Nummern"] = 1;
     strip(/\d[\d.\-\/]{6,}\d/g, "Daten/Nummern");
     strip(/(^|\s)\d{5,}(?=\s|$|[.,;:)])/g, "Daten/Nummern");
-    strip(/(^|\s)\d{4}\s+[A-ZÄÖÜ][\p{L}-]+/gu, "Adressen");
-    strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen");
+    // Adressen: an ihrer Stelle bleibt „(Adresse)“ – eine Notiz, die nur aus einer Adresse besteht, ist meist eine Adressänderung
+    strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen", " (Adresse) ");
+    strip(/(^|\s)(\d{4})\s+([A-ZÄÖÜ][\p{L}-]+)/gu, "Adressen", function (m0, pre, plz, ort) {
+      return /^(?:19|20)\d\d$/.test(plz) && isVocab(ort) ? m0 : " (Adresse) ";   // „2025 Fotobuch“ ist ein Jahr, keine PLZ
+    });
+    t = t.replace(/\(Adresse\)(?:[\s,;]*\(Adresse\))+/g, "(Adresse)");
     // Namen nach einer Anrede (Frau Müller, Hr. Hans Peter Meier, Frau Dr. Anna Meier): Anrede bleibt,
     // Titel und bis zu 3 Namen weg. Das 1. Wort ist immer ein Name (auch "Frau Klein"), ausser es ist eine
     // Abkürzung ("Hr. FB n. erh."); ab dem 2. Wort bleibt ein bekanntes Wort ("Frau Meier RE doppelt")
@@ -2404,9 +2411,10 @@ var Table = (function () {
       });
     });
     labels.sort(function (a, b) { return b.len - a.len; });
-    function find(s) {
+    function find(s, labelOnly) {
       var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, k, x, L, hit = null, tree;
       s = s.trim();
+      if (!labelOnly) {
       // ganze Zelle eine Zahl mit "." / "," / NBSP als Tausendertrennzeichen ("10.211", "50,412", "50.410,00"): die ganze
       // Zahl zählt; mit 1–2 Ziffern vorne nie ein Stück davon ("50.999" -> nichts statt 999; "50 412" mit gewöhnlichem
       // Leerzeichen -> nichts statt 412). Mit 3 Ziffern vorne evtl. eine Liste ("511,517"), dann wie bisher
@@ -2417,6 +2425,7 @@ var Table = (function () {
       }
       s = s.replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
       while ((m = re.exec(s))) if (known[m[2]]) return m[2];
+      }
       v = norm(s);
       if (!v) return null;
       if (exact[v] && exact[v] !== "?") return exact[v];
@@ -2434,11 +2443,14 @@ var Table = (function () {
       }
       return hit ? hit.code : null;
     }
-    return function (value) {
+    var fn = function (value) {
       if (value == null) return null;
       var k = String(value);
       return k in memo ? memo[k] : (memo[k] = find(k));
     };
+    // nur über die Bezeichnung (ohne Zahlen): erkennt Textzellen, die selbst eine Klassifizierung sind (z.B. Titel „Adressänderung“)
+    fn.label = function (value) { return value == null ? null : find(String(value), true); };
+    return fn;
   }
 
   // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel nennt zugleich eine Notiz, s. NOTEHEAD,
@@ -2609,7 +2621,7 @@ var Table = (function () {
   // Zeilen nach der Kopfzeile -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code, ohne Text,
   // Summenzeile oder (bei fillDown) Gruppenzeile. fillDown: leere Klassifizierung = die letzte darüber (bis zur Summenzeile)
   function toCases(rows, cfg, resolve) {
-    var out = { cases: [], total: 0, noCode: 0, noText: 0, subtotal: 0, groupRows: 0, filled: 0, unknown: [], textColsWithCodes: [] };
+    var out = { cases: [], total: 0, noCode: 0, noText: 0, subtotal: 0, groupRows: 0, filled: 0, labelCells: 0, unknown: [], textColsWithCodes: [] };
     var unk = Object.create(null), order = [], cols = cfg.textCols || [], codeCol = cfg.codeCol == null ? -1 : cfg.codeCol;
     var hr = cfg.headerRow != null ? +cfg.headerRow : cfg.header ? 0 : -1, fill = !!cfg.fillDown && codeCol >= 0, last = null;
     var tc = cols.map(function () { return { ne: 0, ok: 0 }; }), lines, i, j, v, c, t, x, filled;
@@ -2626,8 +2638,10 @@ var Table = (function () {
       for (j = 0; j < cols.length; j++) {
         x = cell(rows[i], cols[j]).trim();
         if (!x) continue;
-        if (t.indexOf(x) < 0) t.push(x);   // gleicher Text in zwei Spalten nur einmal
         if (tc[j].ne < 500) { tc[j].ne++; if (resolve(x)) tc[j].ok++; }
+        // eine kurze Zelle, die nur eine Klassifizierung nennt (Titel „Adressänderung“), verrät die Lösung: weglassen
+        if (resolve.label && x.split(/\s+/).length <= 8 && resolve.label(x)) { out.labelCells++; continue; }
+        if (t.indexOf(x) < 0) t.push(x);   // gleicher Text in zwei Spalten nur einmal
       }
       if (!c) {
         out.noCode++;
@@ -3088,6 +3102,8 @@ var Table = (function () {
     if (r.noText) html += " · " + fmt(r.noText) + " ohne Text";
     if (r.subtotal) html += " · " + nf(r.subtotal, "Summenzeile", "Summenzeilen");
     if (r.groupRows) html += " · " + nf(r.groupRows, "Gruppenzeile", "Gruppenzeilen");
+    if (r.labelCells) html += "<br>" + (r.labelCells === 1 ? "1 Textzelle nannte" : fmt(r.labelCells) + " Textzellen nannten") +
+      " nur die Klassifizierung selbst (z.B. ein Titel wie „Adressänderung“) und " + (r.labelCells === 1 ? "wurde" : "wurden") + " weggelassen – sonst wäre der Test zu gut.";
     if (r.filled) html += "<br>" + (r.filled === 1 ? "1 Fall hat" : fmt(r.filled) + " Fälle haben") + " die Klassifizierung aus der Zeile darüber" +
       (imp.cfg.fillDown ? " (Häkchen oben – bei einer einfachen Liste ausschalten)." : ".");
     if (!r.cases.length && imp.sheets && imp.sheets.length > 1) html += "<br>Dieses Blatt enthält keine Fälle? Oben unter „Blatt“ ein anderes wählen.";
@@ -3343,7 +3359,7 @@ var Table = (function () {
       app: "Fall-Klassifizierung", typ: "Auswertung", version: 2, erstellt: new Date().toISOString().slice(0, 10),
       hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes und Stichwort-Regeln" + (words ? " sowie ausgewählte Wörter aus mindestens 5 Fällen" : "") + ".",
       quelle: { format: imp.format, zeilen: res.total, faelle: res.cases.length, ohneCode: res.noCode, ohneText: res.noText,
-        summenzeilen: res.subtotal || 0, ausZeileDarueber: res.filled || 0,
+        summenzeilen: res.subtotal || 0, ausZeileDarueber: res.filled || 0, nurKlassifizierungImText: res.labelCells || 0,
         nichtErkannteCodes: codeLike.map(function (u) { return [String(u[0]).match(/\d{3,5}/)[0], u[1]]; }) },
       test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped,
         zuKurzZumLernen: r.zuKurzZumLernen, gleicherText: r.sameText, fastGleicherText: r.nearDup, veraenderteFaelle: r.pairs },

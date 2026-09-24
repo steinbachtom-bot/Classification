@@ -366,7 +366,7 @@ var Engine = (function () {
       if (re.test(t)) { re.lastIndex = 0; t = t.replace(re, " "); removed["Höflichkeitsfloskeln"] = 1; }
     });
     // Kontaktdaten und Nummern
-    function strip(re, what) { var n = t.replace(re, " "); if (n !== t) { removed[what] = 1; t = n; } }
+    function strip(re, what, by) { var n = t.replace(re, by || " "); if (n !== t) { removed[what] = 1; t = n; } }
     strip(/[\w.+-]{1,64}@[\w-]+\.[\w.-]+/g, "E-Mail-Adressen");   // {1,64}: sonst sehr langsam bei langen Wörtern
     strip(/(?:https?:\/\/|www\.)\S+/gi, "Links");
     // IBAN (mit/ohne Leerzeichen, alle Länder) und Kartennummern in 4er-Gruppen
@@ -385,8 +385,12 @@ var Engine = (function () {
     if (t !== n0) removed["Daten/Nummern"] = 1;
     strip(/\d[\d.\-\/]{6,}\d/g, "Daten/Nummern");
     strip(/(^|\s)\d{5,}(?=\s|$|[.,;:)])/g, "Daten/Nummern");
-    strip(/(^|\s)\d{4}\s+[A-ZÄÖÜ][\p{L}-]+/gu, "Adressen");
-    strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen");
+    // Adressen: an ihrer Stelle bleibt „(Adresse)“ – eine Notiz, die nur aus einer Adresse besteht, ist meist eine Adressänderung
+    strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen", " (Adresse) ");
+    strip(/(^|\s)(\d{4})\s+([A-ZÄÖÜ][\p{L}-]+)/gu, "Adressen", function (m0, pre, plz, ort) {
+      return /^(?:19|20)\d\d$/.test(plz) && isVocab(ort) ? m0 : " (Adresse) ";   // „2025 Fotobuch“ ist ein Jahr, keine PLZ
+    });
+    t = t.replace(/\(Adresse\)(?:[\s,;]*\(Adresse\))+/g, "(Adresse)");
     // Namen nach einer Anrede (Frau Müller, Hr. Hans Peter Meier, Frau Dr. Anna Meier): Anrede bleibt,
     // Titel und bis zu 3 Namen weg. Das 1. Wort ist immer ein Name (auch "Frau Klein"), ausser es ist eine
     // Abkürzung ("Hr. FB n. erh."); ab dem 2. Wort bleibt ein bekanntes Wort ("Frau Meier RE doppelt")
