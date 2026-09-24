@@ -1,6 +1,6 @@
 # Récap : outil de classification des cas (service client ifolor)
 
-> À lire en premier. Dernière mise à jour : 24 septembre 2026, soir (version 4 + premiers vrais cas).
+> À lire en premier. Dernière mise à jour : 24 septembre 2026, soir (version 4 + mots-clés réglés sur les vrais cas).
 
 ## Contexte
 
@@ -148,19 +148,29 @@ Avant ces deux ajouts, les chiffres étaient d'environ 1 à 2 points plus bas.
   - 50702 ↔ 50403 (doublon / stornieren) ;
 - des cas ambigus ou sans rapport (« TEST », renvois à d'autres cas « CAS-… »).
 
-**En cours au moment de ce récap :**
-- 4 agents améliorent les règles de `src/data.js` par groupe de codes, sur `dev` uniquement et dans des copies privées. Les groupes : « Product & Order Information », « Finance », « Product & Tech » (reste), « Operations + Marketing ».
-- Ensuite :
-  1. fusionner leurs propositions (script de fusion dans le scratchpad de la session) ;
-  2. mesurer `dev` et `test` ;
-  3. vérifier que le gain sur `test` est réel et que les règles ne contiennent ni noms ni numéros ;
-  4. vérifier `node tests/run-tests.js`.
-- Si cette étape n'est pas dans l'historique git, elle n'est pas terminée : la refaire avec la même méthode.
+**Mots-clés réglés sur les vrais cas (fait, commit « Mots-clés réglés sur 527 vrais cas ») :**
+- **Méthode :**
+  - 4 agents ont réécrit les règles de 109 classifications dans `src/data.js`, un groupe chacun (« Product & Order Information », « Finance », « Product & Tech » (reste), « Operations + Marketing »). Ils ont ajouté des groupes `SYN` préfixés (`order_…`, `tech_…`, `ops_…`), avec des mots allemands, français et italiens.
+  - Ils ont travaillé **uniquement sur `dev`**, chacun dans une copie privée. Les propositions ont été fusionnées, puis mesurées une seule fois sur `test`.
+  - Vérifié : aucun nom, numéro ou mot propre à un client dans les règles (comparaison automatique avec la colonne `Kunde` et avec les nombres).
+- **Résultats sur `test`** (264 cas les plus récents, jamais regardés pendant le réglage) :
+
+  | Mesure | Platz 1 | Parmi les 3 | Kein Vorschlag |
+  |---|---|---|---|
+  | Description seule | 36 % → **50 %** | 46 % → **61 %** | 15 % → 8 % |
+  | Titre + description | 36 % → **54 %** | 50 % → **66 %** | 11 % → 7 % |
+  | Titre + description, avec les cas `dev` appris | 52 % | 67 % | |
+
+  Avant les abréviations réelles et « (Adresse) », la v4 était à 35 % en Platz 1 et 45 % parmi les 3 (description seule).
+- **Sur `dev`**, les chiffres montent bien plus (description seule : 27 % → 66 % en Platz 1, 39 % → 77 % parmi les 3). **Une partie des règles est donc calquée sur ces cas.** Seuls les chiffres de `test` sont honnêtes.
+- Phrases inventées : Platz 1 légèrement en baisse (Kurztests 40 → 38, 2e phrase 34 → 33), parmi les 3 inchangé.
+- **Pratique réelle de Tom :** « nicht erhalten / nie angekommen » est classé **50401** (statut) ou **516** (envoi perdu), presque jamais 50410 (1 fois sur 791). Les tests unitaires ont été adaptés : ce sont des tests de nettoyage, et ils acceptent maintenant cette famille de codes.
+- **Erreurs qui restent**, souvent impossibles à trancher avec le texte seul : « Test », renvois « CAS-… », sujets sans rapport, codes voisins (50401 / 50502 / 516 ; 50103 / 50207 / 50112).
 
 ## Prochaines étapes (par priorité)
 
-1. **Terminer l'amélioration des mots-clés sur les vrais cas** (voir « En cours » plus haut). Mesurer sur `test` : c'est le seul chiffre honnête à donner à Tom.
-2. **Recommander à Tom d'importer ses propres cas** dans l'outil (« Fälle importieren und testen » puis « Alle übernehmen »). Sur ses cas, le verdict devrait être positif : +18 points parmi les 3 en « leave-one-out ». Ça reste local, dans son navigateur.
+1. **Nouvel export plus tard** (cas créés après le 22.09.2026) : mesurer avec `tests/echte-faelle.js` sur **ces nouveaux cas**, c'est la vraie preuve. Ne régler les règles que sur des cas anciens (`dev`), jamais sur les cas qui servent à mesurer.
+2. **Import de ses propres cas dans l'outil** (« Alle übernehmen ») : avec les nouvelles règles, le gain est faible (+2 points parmi les 3, −2 en Platz 1 sur `test`). Laisser Tom décider d'après le verdict de l'outil. Avant ces règles, il était de +18 points.
 3. **Faire confirmer les abréviations devinées par Tom** (GU, PB, CC, CL, KS ; GS = Gutschein ou Gutschrift ?) et lui demander la liste complète.
 4. **Pour les collègues ou d'autres exports :** leurs notes peuvent différer. Utiliser le test local et le rapport sans textes clients (« Bericht exportieren »). Utiliser :
    - `verwechslungen`, pour voir quels codes sont confondus ;

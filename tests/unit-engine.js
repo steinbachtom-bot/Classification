@@ -25,6 +25,9 @@ function test(name, fn) {
   try { fn(); ok++; } catch (e) { failures.push(name); console.log(`FEHLER ${name}: ${String(e.message).split('\n').slice(0, 6).join('\n   ')}`); }
 }
 const codes = r => r.map(x => x.c.code);
+// „Lieferung nicht erhalten“: in den echten Fällen meist 50401 (Auftragsstatus), sonst 516 (Untergang) – 50410 nur 1× von 791
+const LIEF = ['50401', '516', '50410'];
+const isCode = (c, want) => want === 'LIEF' ? LIEF.includes(c) : c === want;
 const first = v => Array.isArray(v) ? first(v[0]) : v;
 const hasWord = s => /[\p{L}\p{N}]/u.test(s);
 // deterministischer Zufall
@@ -208,23 +211,23 @@ function engineWithAbk(extra) {
 }
 test('Namen nach Anrede: Abkürzungen bleiben, "Fr." = Freitag, "meine Frau" = Nomen', () => {
   // Kurznotizen mit Anrede + Name + interner Abkürzung: Name weg, Abkürzung und Vorschlag bleiben
-  [['Hr. Müller FB n. erh.', 'Hr. FB n. erh.', '50410'], ['Frau Meier RE doppelt', 'Frau RE doppelt', '50103'],
+  [['Hr. Müller FB n. erh.', 'Hr. FB n. erh.', 'LIEF'], ['Frau Meier RE doppelt', 'Frau RE doppelt', '50103'],
     ['Fr. Meier LW beschädigt', 'Fr. LW beschädigt', '10116'], ['Frau Huber LS fehlt', 'Frau LS fehlt', '430'],
-    ['Herr Graf WK leer', 'Herr WK leer', '30212'], ['Kd. Fr. Meier FB n. erh.', 'Kd. Fr. FB n. erh.', '50410'],
-    ['Frau Meier FBs n. erh.', 'Frau FBs n. erh.', '50410'], ['Hr. FB n. erh.', 'Hr. FB n. erh.', '50410'],
+    ['Herr Graf WK leer', 'Herr WK leer', '30212'], ['Kd. Fr. Meier FB n. erh.', 'Kd. Fr. FB n. erh.', 'LIEF'],
+    ['Frau Meier FBs n. erh.', 'Frau FBs n. erh.', 'LIEF'], ['Hr. FB n. erh.', 'Hr. FB n. erh.', 'LIEF'],
     ['Hr. Keller GS n. erh.', 'Hr. GS n. erh.', null],
     // "Fr." = Freitag
     ['Am Fr. Rechnung doppelt erhalten', 'Am Fr. Rechnung doppelt erhalten', '50103'],
-    ['Seit Fr. Fotobuch nicht erhalten', 'Seit Fr. Fotobuch nicht erhalten', '50410'],
-    ['Letzten Fr. Paket bestellt, noch nicht da', 'Letzten Fr. Paket bestellt, noch nicht da', '50410'],
-    ['jeden Fr. FB n. erh.', 'jeden Fr. FB n. erh.', '50410'], ['Mo. - Fr. Paket kommt nicht', 'Mo. - Fr. Paket kommt nicht', null],
+    ['Seit Fr. Fotobuch nicht erhalten', 'Seit Fr. Fotobuch nicht erhalten', 'LIEF'],
+    ['Letzten Fr. Paket bestellt, noch nicht da', 'Letzten Fr. Paket bestellt, noch nicht da', 'LIEF'],
+    ['jeden Fr. FB n. erh.', 'jeden Fr. FB n. erh.', 'LIEF'], ['Mo. - Fr. Paket kommt nicht', 'Mo. - Fr. Paket kommt nicht', null],
     // "meine Frau", "die Familie": Nomen, das bekannte Wort danach bleibt
     ['Ich habe für die Familie Kalender bestellt', 'Ich habe für die Familie Kalender bestellt', '10114'],
     ['Meine Frau Tasse zerbrochen', 'Meine Frau Tasse zerbrochen', '381'],
     ['unserer Familie Kalender geschenkt', 'unserer Familie Kalender geschenkt', null]]
     .forEach(([t, exp, code]) => {
       assert.strictEqual(E.prepare(t).cleaned, exp, t);
-      if (code) assert.strictEqual(codes(E.classify(t))[0], code, t + ' -> ' + codes(E.classify(t)));
+      if (code) assert.ok(isCode(codes(E.classify(t))[0], code), t + ' -> ' + codes(E.classify(t)));
     });
   assert.ok(codes(E.classify('Hr. Keller GS n. erh.')).includes('20709'));
   // alle Abkürzungen in Grossbuchstaben aus ABK, auch später ergänzte
@@ -247,7 +250,7 @@ test('Bereinigung ist stabil: gelernter Text ändert sich beim zweiten Bereinige
 test('Kurze Notiz mit Gruss vor weitergeleiteter Nachricht ohne Kopf; E-Mail nach Name; „Fr.“ am Zeilenanfang', () => {
   const fwd = 'FYI\nLG Sandra\n\nGuten Tag\nMein Fotobuch ist nie angekommen.\nFreundliche Grüsse\nAnna Beispiel';
   assert.ok(/Fotobuch ist nie angekommen/.test(E.prepare(fwd).cleaned));
-  assert.strictEqual((E.classify(fwd)[0] || { c: {} }).c.code, '50410');
+  assert.ok(isCode((E.classify(fwd)[0] || { c: {} }).c.code, 'LIEF'));
   assert.ok(/E-Mail/.test(E.prepare('Frau Keller E-Mail ändern').cleaned));
   assert.ok(!/Keller/.test(E.prepare('Frau Keller E-Mail ändern').cleaned));
   assert.ok(/Rechnung/.test(E.prepare('Fr. Rechnung nicht erhalten').cleaned));
@@ -292,13 +295,13 @@ test('Grussformel oder "--" weit oben: nur die Zeile weg, wenn keine Signatur fo
     ['Das Fotobuch ist nie angekommen, bitte prüfen Sie das.\n--\n' + DISC, 'Das Fotobuch ist nie angekommen, bitte prüfen Sie das.'],
     ['Guten Tag, mein Fotobuch ist nie angekommen, bitte prüfen.\n--\nAnna Beispiel\nBeispiel AG\n' + DISC, 'mein Fotobuch ist nie angekommen, bitte prüfen.']]
     .forEach(([t, exp]) => assert.strictEqual(E.prepare(t).cleaned, exp, JSON.stringify(t)));
-  [['Liebe Grüsse Anna\nDas Fotobuch ist nie angekommen.', '50410'], ['Kunde ruft an\n--\nFB Seiten lose, Ersatz gewünscht', '315'],
-    ['--\nDas Fotobuch ist nie angekommen.', '50410'], ['Danke!\nFB NICHT ERH.', '50410'], ['Danke\nRE DOPPELT', '50103']]
-    .forEach(([t, c]) => assert.ok(codes(E.classify(t)).includes(c), JSON.stringify(t) + ' -> ' + codes(E.classify(t))));
+  [['Liebe Grüsse Anna\nDas Fotobuch ist nie angekommen.', 'LIEF'], ['Kunde ruft an\n--\nFB Seiten lose, Ersatz gewünscht', '315'],
+    ['--\nDas Fotobuch ist nie angekommen.', 'LIEF'], ['Danke!\nFB NICHT ERH.', 'LIEF'], ['Danke\nRE DOPPELT', '50103']]
+    .forEach(([t, c]) => assert.ok(codes(E.classify(t)).some(x => isCode(x, c)), JSON.stringify(t) + ' -> ' + codes(E.classify(t))));
 });
 test('kurze Weiterleitungen: Kopf weg, weiter mit der weitergeleiteten Mail', () => {
   // [Text, muss bleiben, darf nicht bleiben, Code unter den Vorschlägen]
-  [['FYI\nLG Tom\n\nAm 3.9.2026 schrieb Kunde:\nDas Fotobuch ist nie angekommen.', ['Das Fotobuch ist nie angekommen.'], ['Tom', 'schrieb'], '50410'],
+  [['FYI\nLG Tom\n\nAm 3.9.2026 schrieb Kunde:\nDas Fotobuch ist nie angekommen.', ['Das Fotobuch ist nie angekommen.'], ['Tom', 'schrieb'], 'LIEF'],
     ['Hallo\nGruss Anna\n\n-----Ursprüngliche Nachricht-----\nVon: kunde@example.ch\nBetreff: Fotobuch\n\nMein Fotobuch ist kaputt angekommen, die Seiten lösen sich.',
       ['Mein Fotobuch ist kaputt angekommen, die Seiten lösen sich.'], ['Anna', 'Ursprüngliche', 'Nachricht', 'example'], '315'],
     ['Weiterleitung\nGruss Peter\n\n---------- Forwarded message ----------\nFrom: x@example.ch\nMeine Rechnung ist doppelt.',
@@ -306,14 +309,14 @@ test('kurze Weiterleitungen: Kopf weg, weiter mit der weitergeleiteten Mail', ()
     ['Bitte erledigen\nLG Tom\n\nAm 3.9.2026 um 10:12 schrieb Anna Beispiel <anna@example.ch>:\nGuten Tag, die Rechnung ist doppelt.',
       ['die Rechnung ist doppelt.'], ['Tom', 'Anna', 'Beispiel', 'schrieb'], '50103'],
     ['Zur Info\nGruss Sandra\n\nVon: Anna Beispiel\nGesendet: Montag, 3. September 2026\nAn: Service\nBetreff: Fotobuch\n\nGuten Tag\nMein Fotobuch ist nie angekommen.\nFreundliche Grüsse\nAnna',
-      ['Mein Fotobuch ist nie angekommen.'], ['Sandra', 'Anna', 'Beispiel', 'Freundliche'], '50410'],
+      ['Mein Fotobuch ist nie angekommen.'], ['Sandra', 'Anna', 'Beispiel', 'Freundliche'], 'LIEF'],
     ['FYI\n\nFreundliche Grüsse\nTom\n\n-----Original Message-----\nFrom: anna@example.ch\nSubject: Fotobuch\nDas Fotobuch hat lose Seiten.',
       ['Das Fotobuch hat lose Seiten.'], ['Tom', 'Original'], '315']]
     .forEach(([t, keep, gone, code]) => {
       const p = E.prepare(t), l = E.learnText(t);
       keep.forEach(k => { assert.ok(p.cleaned.includes(k), `${JSON.stringify(t)} -> ${JSON.stringify(p.cleaned)} (ohne ${k})`); assert.ok(l.includes(k), 'learnText ' + k); });
       gone.forEach(g => assert.ok(!p.cleaned.includes(g), `${JSON.stringify(t)} -> ${JSON.stringify(p.cleaned)} (enthält ${g})`));
-      assert.ok(codes(E.classify(t)).includes(code), JSON.stringify(t) + ' -> ' + codes(E.classify(t)));
+      assert.ok(codes(E.classify(t)).some(x => isCode(x, code)), JSON.stringify(t) + ' -> ' + codes(E.classify(t)));
     });
   // Antwort mit Text darüber (ab 3 Wörtern vor dem Gruss bzw. 6 Wörtern vor dem Kopf): Verlauf darunter fällt weg (wie bisher)
   assert.strictEqual(E.prepare('Wann kommt es endlich?\nGruss Anna\n\nAm 3.9.2026 schrieb Kundendienst <service@example.ch>:\nIhr Paket wurde versendet.').cleaned,
@@ -383,7 +386,7 @@ const LACK = lonely[2];
   'Kunde fragt, ob der Zauberlack auch für Kalender erhältlich ist', 'Beim Zauberlack sind Schlieren sichtbar',
   'Zauberlack riecht stark, Kundin ist unsicher', 'Zauberlack fehlt auf der Rückseite'].forEach(t => synth.push({ t, c: LACK }));
 // kurze Notizen: werden getestet, sind aber zu kurz zum Lernen
-const SHORT = [{ t: 'Kd. hat FB n. erh.', c: '50410' }, { t: 'FB n. erh.', c: '50410' }, { t: 'Paket nicht erhalten', c: '50410' }];
+const SHORT = [{ t: 'Kd. hat FB n. erh.', c: '50401' }, { t: 'FB n. erh.', c: '50401' }, { t: 'Paket nicht erhalten', c: '50401' }];
 SHORT.forEach(x => synth.push(x));
 // nicht verwendbar (unbekannter Code oder leer) bzw. nur Test (zu kurz)
 const BAD = [{ t: 'Paket nicht angekommen, Tracking zeigt nichts', c: '99999' }, { t: 'Rechnung doppelt erhalten', c: '' }, { t: 'Rechnung doppelt erhalten' },
@@ -468,10 +471,10 @@ test('kurze Notizen werden getestet', () => {
     const d = byI[cases.indexOf(x)];
     assert.ok(d, 'getestet: ' + x.t);
     assert.strictEqual(d.lernbar, false);
-    assert.strictEqual(d.top.regeln[0], '50410', JSON.stringify(d.top));
+    assert.ok(isCode(d.top.regeln[0], 'LIEF'), JSON.stringify(d.top));
   });
-  const pc = R.perCode.find(p => p.code === '50410');
-  assert.ok(pc && pc.n >= SHORT.length + 1, JSON.stringify(pc));   // auch pro Code mitgezählt
+  const pc = R.perCode.find(p => p.code === '50401');
+  assert.ok(pc && pc.n >= SHORT.length, JSON.stringify(pc));   // auch pro Code mitgezählt
   // Notizen, die zu kurz zum Lernen sind, sind nie ähnliche Fälle; lernbare schon
   const code = lonely[3], extra = [{ t: 'Lack', c: code }, { t: 'Lack matt', c: code }];
   assert.ok(!E.learnText(extra[0].t) && E.learnText(extra[1].t));
