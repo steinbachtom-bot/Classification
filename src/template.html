@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fall-Klassifizierung</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #dfe3e8;
+    --text: #1d232b;
+    --muted: #5d6773;
+    --faint: #8b949e;
+    --accent: #1f6feb;
+    --accent-soft: #e7f0ff;
+    --ok: #1a7f37;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    --c-marketing: #8250df;
+    --c-operations: #bc4c00;
+    --c-finance: #1a7f37;
+    --c-product: #0969da;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --surface: #171b21;
+      --surface-2: #1e232a;
+      --border: #2c333c;
+      --text: #e6e9ed;
+      --muted: #a2abb6;
+      --faint: #707a86;
+      --accent: #4c8dff;
+      --accent-soft: #1a2638;
+      --ok: #3fb950;
+      --shadow: none;
+      --c-marketing: #b392f0;
+      --c-operations: #f0883e;
+      --c-finance: #56d364;
+      --c-product: #58a6ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 16px 60px; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0; }
+  .badge { font-size: 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .input-card { padding: 14px; }
+  .input-card label { display: block; font-weight: 600; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .field { position: relative; }
+  textarea {
+    width: 100%; min-height: 92px; resize: vertical;
+    padding: 12px 40px 12px 12px;
+    font: inherit; font-size: 16px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--surface); }
+  .clear {
+    position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
+    border: 0; border-radius: 6px; background: transparent; color: var(--faint);
+    font-size: 20px; line-height: 1; cursor: pointer; display: none;
+  }
+  .clear:hover { background: var(--surface-2); color: var(--text); }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .examples span { font-size: 12px; color: var(--faint); margin-right: 2px; }
+  .chip {
+    font: inherit; font-size: 12.5px; color: var(--muted);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 10px; cursor: pointer;
+  }
+  .chip:hover { color: var(--text); border-color: var(--faint); }
+  .hint { font-size: 12px; color: var(--faint); margin-top: 8px; }
+  kbd { font: 11px ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+
+  .section-title { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 2px 8px; }
+  .section-title h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
+  .section-title .count { font-size: 12px; color: var(--faint); }
+
+  .results { display: flex; flex-direction: column; gap: 8px; }
+  .res {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 4px 12px; align-items: start;
+    padding: 12px 14px;
+  }
+  .res.best { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+  .rank {
+    width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center;
+    font-size: 12px; font-weight: 700; color: var(--muted); background: var(--surface-2); margin-top: 1px;
+  }
+  .res.best .rank { background: var(--accent); color: #fff; }
+  .title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .code {
+    font: 600 14px ui-monospace, Menlo, Consolas, monospace; color: var(--accent);
+    background: var(--accent-soft); border: 0; border-radius: 6px; padding: 2px 7px; cursor: pointer;
+  }
+  .code:hover { filter: brightness(.95); }
+  .label { font-weight: 600; font-size: 15.5px; }
+  .alt { font-size: 12px; color: var(--faint); }
+  .path { font-size: 12.5px; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .why { font-size: 12.5px; color: var(--faint); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .why mark { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .fit { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .bar { width: 64px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .copy {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 5px 12px; cursor: pointer;
+  }
+  .copy:hover { border-color: var(--accent); color: var(--accent); }
+  .copy.done { color: var(--ok); border-color: var(--ok); }
+
+  .empty { padding: 22px 16px; text-align: center; color: var(--muted); }
+  .empty strong { display: block; color: var(--text); margin-bottom: 4px; }
+
+  details.browse { margin-top: 26px; }
+  details.browse > summary {
+    list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  details.browse > summary::-webkit-details-marker { display: none; }
+  details.browse > summary::after { content: "▾"; color: var(--faint); transition: transform .15s; }
+  details.browse[open] > summary::after { transform: rotate(180deg); }
+  .browse-body { border-top: 1px solid var(--border); padding: 12px 14px 14px; }
+  .filter {
+    width: 100%; font: inherit; padding: 8px 10px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; outline: none; margin-bottom: 10px;
+  }
+  .filter:focus { border-color: var(--accent); background: var(--surface); }
+  .grp h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 4px; display: flex; align-items: center; gap: 6px; }
+  .row {
+    display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
+    font: inherit; font-size: 14px; color: var(--text); background: transparent; border: 0;
+    padding: 5px 6px; border-radius: 6px; cursor: pointer;
+  }
+  .row:hover { background: var(--surface-2); }
+  .row code { font: 600 13px ui-monospace, Menlo, Consolas, monospace; color: var(--accent); min-width: 52px; }
+  .row small { color: var(--faint); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: all .18s; max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  footer { margin-top: 26px; font-size: 12px; color: var(--faint); text-align: center; }
+
+  @media (max-width: 560px) {
+    .res { grid-template-columns: 24px 1fr; }
+    .side { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; margin-top: 6px; }
+    .examples span { width: 100%; }
+  }
+
+  .clean-info { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 1em; }
+  .clean-info b { font-weight: 600; color: var(--text); }
+  .tag-learned {
+    font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ok);
+    border: 1px solid var(--ok); border-radius: 999px; padding: 0 7px; line-height: 18px;
+  }
+  .similar { font-size: 12.5px; color: var(--muted); margin-top: 6px; font-style: italic; overflow-wrap: anywhere; }
+  .fix { margin-top: 14px; padding: 12px 14px; }
+  .fix-head { font-size: 13.5px; color: var(--muted); margin-bottom: 8px; }
+  .fix-head strong { color: var(--text); }
+  .pick-list { margin-top: 6px; }
+  .pick-list .row small { margin-left: auto; padding-left: 10px; white-space: nowrap; }
+  details.learned { margin-top: 12px; }
+  details.learned > summary {
+    list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  details.learned > summary::-webkit-details-marker { display: none; }
+  details.learned > summary::after { content: "▾"; color: var(--faint); transition: transform .15s; }
+  details.learned[open] > summary::after { transform: rotate(180deg); }
+  .learned-body { border-top: 1px solid var(--border); padding: 12px 14px 14px; }
+  .note { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+  .warn { font-size: 13px; color: var(--c-operations); margin: 0 0 10px; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .btn {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 6px 12px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.danger:hover { border-color: #cf222e; color: #cf222e; }
+  .litem { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--border); }
+  .litem:first-child { border-top: 0; }
+  .litem code { font: 600 13px ui-monospace, Menlo, Consolas, monospace; color: var(--accent); }
+  .litem .lt { font-size: 13px; }
+  .litem .ls { grid-column: 2; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .litem .del { border: 0; background: transparent; color: var(--faint); font-size: 18px; cursor: pointer; line-height: 1; padding: 0 4px; }
+  .litem .del:hover { color: #cf222e; }
+  .toast button { margin-left: 10px; font: inherit; font-weight: 700; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 6px; padding: 1px 8px; cursor: pointer; }
+  .toast.show.action { pointer-events: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fall-Klassifizierung</h1>
+      <p class="sub">Notiz schreiben oder die ganze Kundennachricht einfügen – passende Klassifizierungen erscheinen sofort.</p>
+    </div>
+    <span class="badge" id="badge"></span>
+  </header>
+
+  <section class="card input-card">
+    <label for="q">Problem des Kunden</label>
+    <div class="field">
+      <textarea id="q" autofocus spellcheck="false"
+        placeholder="Kurze Notiz (z.B. „FB n. erh.“) oder die ganze Nachricht des Kunden einfügen"></textarea>
+      <button class="clear" id="clear" title="Leeren (Esc)" aria-label="Eingabe leeren">×</button>
+    </div>
+    <div class="clean-info" id="cleanInfo"></div>
+    <div class="examples" id="examples"><span>Beispiele:</span></div>
+    <div class="hint"><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>3</kbd> kopiert einen Vorschlag · <kbd>Esc</kbd> leert das Feld · Code eintippen (z.B. 50410) zeigt ihn direkt</div>
+  </section>
+
+  <div class="section-title" id="resTitle" hidden>
+    <h2>Die 3 besten Vorschläge</h2><span class="count" id="resCount"></span>
+  </div>
+  <div class="results" id="results"></div>
+
+  <section class="card fix" id="fix" hidden>
+    <div class="fix-head"><strong>Richtige Klassifizierung nicht dabei?</strong> Hier suchen und kopieren – das Tool merkt sich den Fall für ähnliche Texte.</div>
+    <input class="filter" id="pick" type="search" autocomplete="off" placeholder="Code oder Stichwort, z.B. 50401 oder Rechnung">
+    <div class="pick-list" id="pickList"></div>
+  </section>
+
+  <details class="card browse" id="browse">
+    <summary><span>Alle Klassifizierungen durchsuchen</span></summary>
+    <div class="browse-body">
+      <input class="filter" id="filter" type="search" placeholder="Nach Code oder Bezeichnung filtern …">
+      <div id="list"></div>
+    </div>
+  </details>
+
+  <details class="card learned" id="learnedBox">
+    <summary><span>Gelernte Fälle <span class="count" id="learnedCount"></span></span></summary>
+    <div class="learned-body">
+      <p class="note">Wenn Text im Feld steht und du einen Code kopierst (Vorschlag, Suche oder Liste), merkt sich das Tool diesen Fall. Ähnliche Texte bekommen danach diesen Code vorgeschlagen. Gespeichert wird nur der bereinigte Text (ohne Anrede, Signatur, E-Mail-Adressen, Telefonnummern und Nummern) – nur in diesem Browser.</p>
+      <p class="warn" id="storageWarn" hidden>Dieser Browser erlaubt hier kein dauerhaftes Speichern: gelernte Fälle gehen beim Schliessen verloren. Bitte regelmässig exportieren.</p>
+      <div class="btnrow">
+        <button class="btn" type="button" id="btnExport">Exportieren</button>
+        <button class="btn" type="button" id="btnImport">Importieren</button>
+        <button class="btn danger" type="button" id="btnClear">Alle löschen</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+      <div id="learnedList"></div>
+    </div>
+  </details>
+
+  <footer>Funktioniert offline · Es werden keine Daten gesendet. Gelernte Fälle bleiben in diesem Browser.</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/*__DATA__*/
+</script>
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+(function () {
+  var built = Engine.build(SYN, KLASSEN, ALT_LABELS,
+    typeof ABK !== "undefined" ? ABK : null, typeof BEISPIELE !== "undefined" ? BEISPIELE : []);
+  var CLASSES = built.classes, BY = Engine.byCode;
+  if (built.errors.length && window.console) console.warn(built.errors);
+
+  var COLORS = { "Marketing": "var(--c-marketing)", "Operations": "var(--c-operations)", "Finance": "var(--c-finance)", "Product & Tech": "var(--c-product)" };
+  var EXAMPLES = [
+    "Kd. hat FB n. erh.",
+    "Seiten lösen sich, Coverecke eingedrückt",
+    "Gutscheincode funktioniert nicht",
+    "Mahnung erhalten obwohl bezahlt"
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var q = $("q"), results = $("results"), clearBtn = $("clear");
+  var current = [];
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+  }
+  function full(c) { return c.code + " - " + c.label; }
+  function snippet(t, n) { t = String(t).replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; }
+
+  // ---------- Gelernte Fälle ----------
+  var KEY = "fall-klassifizierung.gelernt.v1", storageOk = true;
+  function loadLearned() {
+    try {
+      var raw = window.localStorage.getItem(KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(function (e) { return e && e.t && e.c; }) : [];
+    } catch (e) { storageOk = false; return []; }
+  }
+  function saveLearned() {
+    try { window.localStorage.setItem(KEY, JSON.stringify(learned)); storageOk = true; }
+    catch (e) { storageOk = false; }
+  }
+  var learned = loadLearned();
+  function reindex() { Engine.setExamples(learned); updateLearnedUI(); }
+
+  function learn(code) {
+    var t = Engine.learnable(q.value);
+    if (!t || !BY[code]) return null;
+    t = t.slice(0, 1500);
+    for (var i = 0; i < learned.length; i++) if (learned[i].t === t && learned[i].c === code) return null;
+    var item = { t: t, c: code, d: new Date().toISOString().slice(0, 10) };
+    learned.push(item); saveLearned(); reindex();
+    return item;
+  }
+  function unlearn(item) {
+    var i = learned.indexOf(item);
+    if (i >= 0) { learned.splice(i, 1); saveLearned(); reindex(); render(); }
+  }
+
+  function updateLearnedUI() {
+    $("badge").textContent = CLASSES.length + " Klassifizierungen · " + learned.length + (learned.length === 1 ? " gelernter Fall" : " gelernte Fälle");
+    $("learnedCount").textContent = "(" + learned.length + ")";
+    $("storageWarn").hidden = storageOk;
+    var items = learned.slice().reverse().slice(0, 40);
+    $("learnedList").innerHTML = items.length ? items.map(function (e) {
+      var c = BY[e.c];
+      return '<div class="litem"><code>' + esc(e.c) + '</code><span class="lt">' + esc(c ? c.label : "") + '</span>' +
+        '<button class="del" type="button" data-del="' + learned.indexOf(e) + '" title="Diesen Fall löschen">×</button>' +
+        '<span class="ls">' + esc(snippet(e.t, 160)) + "</span></div>";
+    }).join("") + (learned.length > 40 ? '<p class="note">… und ' + (learned.length - 40) + ' ältere</p>' : "")
+      : '<p class="note">Noch keine gelernten Fälle.</p>';
+  }
+
+  // ---------- Kopieren ----------
+  var toastT;
+  function toast(msg, actionLabel, action) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.toggle("action", !!action);
+    if (action) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = actionLabel;
+      b.addEventListener("click", function () { action(); t.classList.remove("show"); });
+      t.appendChild(b);
+    }
+    t.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove("show"); }, action ? 5000 : 1800);
+  }
+  function copyText(text, done) {
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      done(ok);
+    }
+    try {
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+  function pick(code, text, btn) {
+    copyText(text, function (ok) {
+      if (!ok) { toast("Kopieren nicht möglich – bitte manuell markieren"); return; }
+      if (btn && btn.classList.contains("copy")) {
+        var o = btn.textContent; btn.textContent = "✓ Kopiert"; btn.classList.add("done");
+        setTimeout(function () { btn.textContent = o; btn.classList.remove("done"); }, 1200);
+      }
+      var item = q.value.trim() ? learn(code) : null;
+      if (btn && btn.closest && btn.closest("#pickList")) { $("pick").value = ""; renderPick(); }
+      if (item) toast("Kopiert: " + text + " · als Fall gelernt", "Nicht lernen", function () { unlearn(item); });
+      else toast("Kopiert: " + text);
+    });
+  }
+
+  // ---------- Vorschläge ----------
+  function fitLabel(r) {
+    if (r.byCode) return "Code";
+    if (r.rel >= 0.75) return "sehr passend";
+    if (r.rel >= 0.45) return "passend";
+    return "möglich";
+  }
+
+  function render() {
+    var text = q.value;
+    clearBtn.style.display = text ? "block" : "none";
+    $("fix").hidden = !text.trim();
+    if (!text.trim()) {
+      current = [];
+      $("resTitle").hidden = true;
+      $("cleanInfo").textContent = "";
+      results.innerHTML = "";
+      return;
+    }
+    var prep = Engine.prepare(text), info = [];
+    if (prep.removed.length) info.push("<b>Nicht berücksichtigt:</b> " + esc(prep.removed.join(", ")));
+    if (prep.abbreviations.length) info.push("<b>Abkürzungen:</b> " + esc(prep.abbreviations.filter(function (a, i, arr) { return arr.indexOf(a) === i; }).join(", ")));
+    $("cleanInfo").innerHTML = info.join(" · ");
+
+    current = Engine.classify(text);
+    $("resTitle").hidden = false;
+    $("resCount").textContent = current.length < 3 && current.length ? (current.length === 1 ? "nur 1 passender Vorschlag" : "nur 2 passende Vorschläge") : "";
+    if (!current.length) {
+      results.innerHTML = '<div class="card empty"><strong>Keine passende Klassifizierung gefunden</strong>' +
+        "Die richtige unten suchen und kopieren – dann erkennt das Tool solche Fälle beim nächsten Mal.</div>";
+      return;
+    }
+    results.innerHTML = current.map(function (r, i) {
+      var c = r.c;
+      var why = r.matched.length ? '<div class="why">Erkannt: ' + r.matched.slice(0, 8).map(function (w) { return "<mark>" + esc(w) + "</mark>"; }).join("") + "</div>" : "";
+      var sim = r.learned ? '<div class="similar">Ähnlicher ' + (r.learned.base ? "Beispielfall" : "gelernter Fall") + ": „" + esc(snippet(r.learned.text, 140)) + "“</div>" : "";
+      return '<article class="card res' + (i === 0 ? " best" : "") + '">' +
+        '<div class="rank" title="Alt+' + (i + 1) + ' kopiert">' + (i + 1) + "</div>" +
+        '<div class="main">' +
+          '<div class="title"><button class="code" data-code="' + esc(c.code) + '" data-copy="' + esc(c.code) + '" title="Nur den Code kopieren">' + esc(c.code) + "</button>" +
+          '<span class="label">' + esc(c.label) + "</span>" +
+          (c.alt ? '<span class="alt">(auch: ' + esc(c.alt) + ")</span>" : "") +
+          (r.learned ? '<span class="tag-learned" title="Vorschlag aus einem ähnlichen, früher klassifizierten Fall">Gelernt</span>' : "") + "</div>" +
+          '<div class="path"><span class="dot" style="background:' + (COLORS[c.bereich] || "var(--faint)") + '"></span>' +
+            esc(c.bereich) + (c.gruppe ? " › " + esc(c.gruppe) : "") + "</div>" +
+          why + sim +
+        "</div>" +
+        '<div class="side">' +
+          '<div class="fit">' + fitLabel(r) + '<span class="bar"><i style="width:' + Math.max(8, Math.min(100, Math.round(r.rel * 100))) + '%"></i></span></div>' +
+          '<button class="copy" data-code="' + esc(c.code) + '" data-copy="' + esc(full(c)) + '">Kopieren</button>' +
+        "</div>" +
+      "</article>";
+    }).join("");
+  }
+
+  var deb;
+  q.addEventListener("input", function () { clearTimeout(deb); deb = setTimeout(render, 120); });
+
+  function clearAll() { q.value = ""; $("pick").value = ""; renderPick(); render(); q.focus(); }
+  clearBtn.addEventListener("click", clearAll);
+
+  document.addEventListener("click", function (e) {
+    var d = e.target.closest("[data-del]");
+    if (d) {
+      var it = learned[parseInt(d.getAttribute("data-del"), 10)];
+      if (it) { learned.splice(learned.indexOf(it), 1); saveLearned(); reindex(); render(); }
+      return;
+    }
+    var b = e.target.closest("[data-copy]");
+    if (b) pick(b.getAttribute("data-code"), b.getAttribute("data-copy"), b);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && document.activeElement === q) { clearAll(); return; }
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      var n = parseInt((e.code || "").replace(/^(Digit|Numpad)/, ""), 10);
+      if (n >= 1 && n <= 3 && current[n - 1]) {
+        e.preventDefault();
+        var btns = results.querySelectorAll(".copy");
+        pick(current[n - 1].c.code, full(current[n - 1].c), btns[n - 1]);
+      }
+    }
+  });
+
+  // Beispiele
+  var exBox = $("examples");
+  EXAMPLES.forEach(function (ex) {
+    var b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = ex;
+    b.addEventListener("click", function () { q.value = ex; render(); q.focus(); });
+    exBox.appendChild(b);
+  });
+
+  // ---------- Suche nach der richtigen Klassifizierung ----------
+  function matches(f) {
+    var parts = Engine.norm(f).split(" ").filter(Boolean);
+    if (!parts.length) return [];
+    return CLASSES.filter(function (c) { return parts.every(function (p) { return c.search.indexOf(p) !== -1; }); });
+  }
+  function rowHtml(c, withGroup) {
+    return '<button class="row" type="button" data-code="' + esc(c.code) + '" data-copy="' + esc(full(c)) + '" title="Klicken zum Kopieren"><code>' +
+      esc(c.code) + "</code><span>" + esc(c.label) + (c.alt ? " <small>(auch: " + esc(c.alt) + ")</small>" : "") + "</span>" +
+      (withGroup ? "<small>" + esc(c.gruppe || c.bereich) + "</small>" : "") + "</button>";
+  }
+  function renderPick() {
+    var f = $("pick").value;
+    var m = matches(f);
+    $("pickList").innerHTML = !f.trim() ? "" : m.length ? m.slice(0, 8).map(function (c) { return rowHtml(c, true); }).join("") +
+      (m.length > 8 ? '<p class="note">' + (m.length - 8) + " weitere – Suche genauer eingeben</p>" : "") : '<p class="note">Nichts gefunden.</p>';
+  }
+  $("pick").addEventListener("input", renderPick);
+
+  // ---------- Gesamtliste ----------
+  function renderList(filter) {
+    var f = Engine.norm(filter || "");
+    var parts = f ? f.split(" ") : [];
+    var html = "", lastG = null, n = 0;
+    CLASSES.forEach(function (c) {
+      if (parts.length && !parts.every(function (p) { return c.search.indexOf(p) !== -1; })) return;
+      n++;
+      if (c.bereich + c.gruppe !== lastG) {
+        if (lastG !== null) html += "</div>";
+        html += '<div class="grp"><h3><span class="dot" style="background:' + (COLORS[c.bereich] || "var(--faint)") + '"></span>' +
+          esc(c.bereich) + (c.gruppe ? " › " + esc(c.gruppe) : "") + "</h3>";
+        lastG = c.bereich + c.gruppe;
+      }
+      html += rowHtml(c, false);
+    });
+    if (lastG !== null) html += "</div>";
+    $("list").innerHTML = n ? html : '<div class="empty">Nichts gefunden.</div>';
+  }
+  $("filter").addEventListener("input", function (e) { renderList(e.target.value); });
+
+  // ---------- Export / Import ----------
+  $("btnExport").addEventListener("click", function () {
+    if (!learned.length) { toast("Noch keine gelernten Fälle"); return; }
+    var data = { app: "Fall-Klassifizierung", version: 1, exportiert: new Date().toISOString(), beispiele: learned };
+    var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "fall-klassifizierung-gelernt-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
+  $("btnImport").addEventListener("click", function () { $("importFile").click(); });
+  $("importFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var data = JSON.parse(rd.result);
+        var arr = Array.isArray(data) ? data : (data.beispiele || data.examples || []);
+        var n = 0;
+        arr.forEach(function (x) {
+          if (!x || !x.t || !BY[x.c]) return;
+          var t = String(x.t).slice(0, 1500);
+          if (learned.some(function (y) { return y.t === t && y.c === x.c; })) return;
+          learned.push({ t: t, c: String(x.c), d: x.d || "" }); n++;
+        });
+        saveLearned(); reindex(); render();
+        toast(n + (n === 1 ? " Fall importiert" : " Fälle importiert"));
+      } catch (err) { toast("Datei konnte nicht gelesen werden"); }
+      e.target.value = "";
+    };
+    rd.readAsText(f);
+  });
+  $("btnClear").addEventListener("click", function () {
+    if (!learned.length) return;
+    if (!window.confirm("Alle " + learned.length + " gelernten Fälle löschen? Tipp: vorher exportieren.")) return;
+    learned = []; saveLearned(); reindex(); render();
+  });
+
+  reindex();
+  renderList("");
+  render();
+})();
+</script>
+</body>
+</html>
