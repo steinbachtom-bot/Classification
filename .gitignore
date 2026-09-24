@@ -1,0 +1,11 @@
+# Jamais de vraies données clients dans le dépôt :
+# exports du CRM, tableaux de cas, cas appris, rapports.
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+tests/real_cases.json
+fall-klassifizierung-gelernt-*.json
+fall-klassifizierung-auswertung-*.json
+node_modules/
