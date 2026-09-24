@@ -73,7 +73,7 @@ var Engine = (function () {
     return { key: mod + words.join(" "), parts: words.map(function (w) { return { w: w, m: modeFor(w, mod) }; }) };
   }
 
-  var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [];
+  var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [], nLit = 0, nPart = 0;
 
   function build(SYN, TEXT, ALT, ABK, BASE) {
     groups = {}; classes = []; byCode = {}; idf = {}; errors = []; abk = [];
@@ -137,6 +137,19 @@ var Engine = (function () {
     var N = classes.length;
     Object.keys(df).forEach(function (k) { idf[k] = Math.log(1 + N / df[k]); });
 
+    // Literale und Wortteile durchnummerieren (Zwischenspeicher je Text als Array)
+    var litIds = Object.create(null), partIds = Object.create(null);
+    nLit = 0; nPart = 0;
+    classes.forEach(function (c) { c.rules.forEach(function (r) { r.terms.concat(r.neg).forEach(function (t) {
+      t.matchers.forEach(function (l) {
+        l.id = litIds[l.key] !== undefined ? litIds[l.key] : (litIds[l.key] = nLit++);
+        l.parts.forEach(function (p) {
+          var k = p.m + ":" + p.w;
+          p.id = partIds[k] !== undefined ? partIds[k] : (partIds[k] = nPart++);
+        });
+      });
+    }); }); });
+
     // Abkürzungen: nur Grossbuchstaben = Gross-/Kleinschreibung beachten
     if (ABK) Object.keys(ABK).sort(function (a, b) { return b.length - a.length; }).forEach(function (k) {
       var cs = !/[a-zäöüß]/.test(k);
@@ -144,8 +157,8 @@ var Engine = (function () {
       abk.push({ re: new RegExp("(^|[^\\p{L}\\p{N}])" + esc + "(?![\\p{L}\\p{N}:])", cs ? "gu" : "giu"), to: ABK[k] });
     });
 
-    featCache = {};
-    baseExamples = (BASE || []).filter(function (e) { return e && e.t && byCode[e.c]; });
+    featCache = Object.create(null);
+    baseExamples = (BASE || []).filter(validEx);
     setExamples(learnedExamples);
     return { classes: classes, errors: errors };
   }
@@ -283,7 +296,10 @@ var Engine = (function () {
   // ------------------------------------------------------------------
   // Gelernte Fälle
   // ------------------------------------------------------------------
-  var baseExamples = [], learnedExamples = [], exItems = [], exDf = {}, exN = 0, featCache = {};
+  var baseExamples = [], learnedExamples = [], featCache = Object.create(null);
+  var LIVE = { agg: "max", w: EX_WEIGHT };   // Einstellung im Tool
+  var TOP3 = [1, 0.5, 0.25];                 // Gewichte bei agg "top3"
+  var liveIndex = makeIndex([]);
   var SUF = ["ungen", "ung", "en", "er", "es", "em", "e", "n", "s", "t"];
   function stem(w) {
     for (var i = 0; i < SUF.length; i++) {
@@ -304,47 +320,134 @@ var Engine = (function () {
     });
     return o;
   }
-  function setExamples(learned) {
-    learnedExamples = (learned || []).filter(function (e) { return e && e.t && byCode[e.c]; });
-    var all = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; })
-      .concat(learnedExamples.map(function (e) { return { t: e.t, c: e.c, base: false }; }));
-    exItems = []; exDf = {};
-    all.forEach(function (e) {
-      var st = featCache[e.t] || (featCache[e.t] = Object.keys(simToks(tokenize(prepare(e.t).text))));
+  function hasCode(c) { return Object.prototype.hasOwnProperty.call(byCode, c); }
+  function validEx(e) { return e && e.t && hasCode(e.c); }
+
+  // Index über Beispiele: Stämme, IDF, Norm und Postings (Stamm -> Beispiele),
+  // damit nur Beispiele mit gemeinsamen Stämmen verglichen werden.
+  // items: [{t, c, base, st?, ...}] – ohne st werden die Stämme aus t berechnet
+  function makeIndex(items) {
+    var ix = { items: [], df: {}, idf: {}, N: 0, post: {} };
+    (items || []).forEach(function (e) {
+      var st = e.st || featCache[e.t] || (featCache[e.t] = Object.keys(simToks(tokenize(prepare(e.t).text))));
       if (!st.length) return;
-      exItems.push({ t: e.t, c: e.c, base: e.base, st: st });
-      st.forEach(function (s) { exDf[s] = (exDf[s] || 0) + 1; });
+      var it = {}, n = ix.items.length, k;
+      for (k in e) if (Object.prototype.hasOwnProperty.call(e, k)) it[k] = e[k];
+      it.st = st;
+      ix.items.push(it);
+      st.forEach(function (s) { ix.df[s] = (ix.df[s] || 0) + 1; (ix.post[s] || (ix.post[s] = [])).push(n); });
     });
-    exN = exItems.length;
-    exItems.forEach(function (e) {
-      var n = 0; e.st.forEach(function (s) { var v = exIdf(s); n += v * v; }); e.norm = Math.sqrt(n);
+    var N = ix.N = ix.items.length;
+    Object.keys(ix.df).forEach(function (s) { ix.idf[s] = Math.log(1 + (N + 1) / (ix.df[s] + 0.5)); });
+    ix.items.forEach(function (e) {
+      var n = 0; e.st.forEach(function (s) { var v = ix.idf[s]; n += v * v; }); e.norm = Math.sqrt(n);
     });
-    return exN;
+    return ix;
   }
-  function exIdf(s) { return Math.log(1 + (exN + 1) / ((exDf[s] || 0) + 0.5)); }
+  function idfOf(ix, s) { var v = ix.idf[s]; return v !== undefined ? v : Math.log(1 + (ix.N + 1) / 0.5); }
+
+  function setExamples(learned) {
+    learnedExamples = (learned || []).filter(validEx);
+    liveIndex = makeIndex(baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; })
+      .concat(learnedExamples.map(function (e) { return { t: e.t, c: e.c, base: false }; })));
+    return liveIndex.N;
+  }
+
+  // Stämme des Suchtextes (Stamm -> Wortpositionen), einmal je Analyse
+  function queryStems(a) { return a.qs || (a.qs = simToks(a.toks)); }
+
+  // Ähnliche Beispiele (Kosinus über IDF-gewichtete Stämme). Nur Beispiele über
+  // EX_MIN und mit mindestens 2 gemeinsamen Wörtern (oder Ähnlichkeit ab 0.6).
+  // opts.exclude(item) -> true: Beispiel überspringen. Ergebnis: [{e, sim, common}]
+  function similar(a, ix, opts) {
+    var out = [];
+    if (!ix || !ix.N) return out;
+    var qs = queryStems(a), qn = 0, cand = [], seen = {}, excl = opts && opts.exclude;
+    Object.keys(qs).forEach(function (s) {
+      var v = idfOf(ix, s), p = ix.post[s], j;
+      qn += v * v;
+      if (p) for (j = 0; j < p.length; j++) if (!seen[p[j]]) { seen[p[j]] = 1; cand.push(p[j]); }
+    });
+    qn = Math.sqrt(qn);
+    if (!qn) return out;
+    cand.sort(function (x, y) { return x - y; });   // Reihenfolge des Index (bei Gleichstand gewinnt das erste)
+    cand.forEach(function (n) {
+      var e = ix.items[n];
+      if (excl && excl(e)) return;
+      var dot = 0, common = [], words = {}, nw = 0;
+      e.st.forEach(function (s) {
+        if (!qs[s]) return;
+        var v = ix.idf[s]; dot += v * v; common.push(s);
+        qs[s].forEach(function (p) { if (!words[p]) { words[p] = 1; nw++; } });
+      });
+      if (!dot) return;
+      var sim = dot / (qn * e.norm);
+      if (nw < 2 && sim < 0.6) return;   // ein einziges gemeinsames Wort reicht meist nicht
+      if (sim > EX_MIN) out.push({ e: e, sim: sim, common: common });
+    });
+    return out;
+  }
+
+  // Bonus der ähnlichen Beispiele je Code. v.agg "max": bestes Beispiel zählt;
+  // "top3": bis zu 3 beste Beispiele, gewichtet 1 : 0.5 : 0.25. v.w = Gewicht
+  function applyLearned(res, a, sims, v) {
+    if (!sims.length) return res;
+    var qs = queryStems(a), per = {};
+    sims.forEach(function (x) { (per[x.e.c] || (per[x.e.c] = [])).push(x); });
+    Object.keys(per).forEach(function (code) {
+      var list = per[code], used, bonus, b, i;
+      if (v.agg === "top3") {
+        used = list.slice().sort(function (x, y) { return y.sim - x.sim; }).slice(0, 3);
+        bonus = 0;
+        for (i = 0; i < used.length; i++) bonus += TOP3[i] * ((used[i].sim - EX_MIN) / (1 - EX_MIN));
+        bonus = v.w * bonus / 1.75;
+      } else {
+        b = list[0];
+        for (i = 1; i < list.length; i++) if (list[i].sim > b.sim) b = list[i];
+        used = [b];
+        bonus = v.w * (b.sim - EX_MIN) / (1 - EX_MIN);
+      }
+      b = used[0];
+      var r = res.byC[code];
+      if (!r) { r = { c: byCode[code], score: 0, pos: {}, byCode: false }; res.results.push(r); res.byC[code] = r; }
+      r.score += bonus;
+      r.learned = { sim: b.sim, text: b.e.t, base: b.e.base };
+      used.forEach(function (x) { x.common.forEach(function (s) { qs[s].forEach(function (p) { r.pos[p] = 1; }); }); });
+    });
+    return res;
+  }
 
   // ------------------------------------------------------------------
   // Klassifizieren
   // ------------------------------------------------------------------
-  function classify(raw, opts) {
-    opts = opts || {};
-    var prep = prepare(raw);
-    var toks = tokenize(prep.text);
+  // Text bereinigen und in Wörter/Sätze zerlegen
+  function analyze(raw) {
+    var prep = prepare(raw), toks = tokenize(prep.text);
     var words = toks.map(function (t) { return t.w; });
-    var rawWords = norm(raw).split(" ").filter(Boolean);
-    var partCache = {}, litCache = {};
-    var longText = words.filter(function (w) { return !FILL[w]; }).length > 20;
+    return { prep: prep, toks: toks, words: words, rawWords: norm(raw).split(" ").filter(Boolean),
+      longText: words.filter(function (w) { return !FILL[w]; }).length > 20 };
+  }
+
+  // Stichwort-Regeln je Klassifizierung (unsortiert, ohne gelernte Fälle).
+  // Ergebnis: {results: [{c, score, pos, byCode, hits}], byC: Code -> Ergebnis}
+  function scoreRules(a, opts) {
+    opts = opts || {};
+    var toks = a.toks, words = a.words, rawWords = a.rawWords, longText = a.longText;
+    var partCache = new Array(nPart), litCache = new Array(nLit);   // je Literal-Schlüssel bzw. Modus+Wort
+    var SEP = "\u0001", joined = SEP + words.join(SEP) + SEP;   // für den Schnelltest in partPos
 
     function partPos(p) {
-      var k = p.m + ":" + p.w;
-      if (partCache[k]) return partCache[k];
+      if (partCache[p.id]) return partCache[p.id];
       var pos = [], i, w;
-      for (i = 0; i < words.length; i++) {
-        w = words[i];
-        if (p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1) pos.push(i);
+      // Schnelltest: kommt das Wort(-stück) überhaupt vor?
+      if (joined.indexOf(p.m === "x" ? SEP + p.w + SEP : p.m === "p" ? SEP + p.w : p.w) !== -1) {
+        for (i = 0; i < words.length; i++) {
+          w = words[i];
+          if (p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1) pos.push(i);
+        }
       }
       var fuzzy = false;
-      if (!pos.length && p.m !== "x" && p.w.length >= 8) {       // Tippfehler tolerieren (nur lange Wörter)
+      if (!pos.length && p.m !== "x" && p.w.length >= 8 && joined.indexOf(SEP + p.w.slice(0, 2)) !== -1) {   // Tippfehler tolerieren (nur lange Wörter)
         var L = p.w.length;
         for (i = 0; i < words.length; i++) {
           w = words[i];
@@ -353,11 +456,11 @@ var Engine = (function () {
         }
         fuzzy = pos.length > 0;
       }
-      return (partCache[k] = { pos: pos, fuzzy: fuzzy });
+      return (partCache[p.id] = { pos: pos, fuzzy: fuzzy });
     }
 
     function litMatch(lit) {
-      if (litCache.hasOwnProperty(lit.key)) return litCache[lit.key];
+      if (litCache[lit.id] !== undefined) return litCache[lit.id];
       var res = null;
       if (lit.parts.length === 1) {
         var r = partPos(lit.parts[0]);
@@ -397,7 +500,7 @@ var Engine = (function () {
           if (all.length) res = { pos: all, fuzzy: lists.some(function (l) { return l.fuzzy; }) };
         }
       }
-      return (litCache[lit.key] = res);
+      return (litCache[lit.id] = res);
     }
 
     function termMatch(t) {
@@ -459,8 +562,7 @@ var Engine = (function () {
         var w = tot * fac * m.f * (m.fuzzy ? 0.75 : 1) * (r.terms.length > 1 ? 1.15 : 1);
         hits.push({ w: w, pos: m.pos, src: r.src || (r.terms[0] && r.terms[0].key) });
       });
-      var ci = rawWords.indexOf(norm(c.code));
-      if (rawWords.length <= 3 && ci !== -1) hits.push({ w: 100, pos: [], code: true });
+      if (rawWords.length <= 3 && rawWords.indexOf(norm(c.code)) !== -1) hits.push({ w: 100, pos: [], code: true });
       if (!hits.length) return;
       hits.sort(function (a, b) { return b.w - a.w; });
       var score = hits[0].w, allPos = {};
@@ -469,42 +571,17 @@ var Engine = (function () {
       var r = { c: c, score: score, pos: allPos, byCode: !!hits[0].code, hits: opts.debug ? hits : undefined };
       results.push(r); byC[c.code] = r;
     });
+    return { results: results, byC: byC };
+  }
 
-    // Ähnlichkeit mit gelernten Fällen
-    if (exN) {
-      var qs = simToks(toks), qk = Object.keys(qs), qn = 0;
-      qk.forEach(function (s) { var v = exIdf(s); qn += v * v; });
-      qn = Math.sqrt(qn);
-      var bestEx = {};
-      var qWords = {};
-      qk.forEach(function (s) { qs[s].forEach(function (p) { qWords[p] = 1; }); });
-      if (qn) exItems.forEach(function (e) {
-        var dot = 0, common = [], words = {};
-        e.st.forEach(function (s) { if (qs[s]) { var v = exIdf(s); dot += v * v; common.push(s); qs[s].forEach(function (p) { words[p] = 1; }); } });
-        if (!dot) return;
-        var sim = dot / (qn * e.norm);
-        if (Object.keys(words).length < 2 && sim < 0.6) return;   // ein einziges gemeinsames Wort reicht meist nicht
-        if (sim > EX_MIN && (!bestEx[e.c] || sim > bestEx[e.c].sim)) bestEx[e.c] = { sim: sim, ex: e, common: common };
-      });
-      Object.keys(bestEx).forEach(function (code) {
-        var b = bestEx[code], r = byC[code];
-        if (!r) { r = { c: byCode[code], score: 0, pos: {}, byCode: false }; results.push(r); byC[code] = r; }
-        r.score += EX_WEIGHT * (b.sim - EX_MIN) / (1 - EX_MIN);
-        r.learned = { sim: b.sim, text: b.ex.t, base: b.ex.base };
-        b.common.forEach(function (s) { qs[s].forEach(function (p) { r.pos[p] = 1; }); });
-      });
-    }
-
+  // Auswahl: sortieren, Schwellen (minAbs, rel), höchstens max Vorschläge,
+  // bei mehreren Problemen möglichst verschiedene
+  function finish(res, a, opts) {
+    opts = opts || {};
+    var results = res.results, toks = a.toks;
+    function posList(r) { return Object.keys(r.pos).map(Number).sort(function (a, b) { return a - b; }); }
     results.forEach(function (r) {
-      var posList = Object.keys(r.pos).map(Number).sort(function (a, b) { return a - b; });
-      var matched = [], seenW = {}, content = [];
-      posList.forEach(function (p) {
-        var o = toks[p].orig;
-        if (!seenW[o.toLowerCase()]) { seenW[o.toLowerCase()] = 1; matched.push(o); }
-        if (!FILL[toks[p].w]) content.push(p);
-      });
-      var shown = matched.filter(function (o) { return !FILL[norm(o)]; });
-      r.matched = shown.length ? shown : matched; r.content = content;
+      r.content = posList(r).filter(function (p) { return !FILL[toks[p].w]; });
     });
 
     results.sort(function (a, b) {
@@ -533,7 +610,24 @@ var Engine = (function () {
       groupsUsed[pick.c.bereich + pick.c.gruppe] = 1;
       picked.push(pick);
     }
-    return picked.map(function (r) { r.rel = r.score / top; return r; });
+    return picked.map(function (r) {
+      // erkannte Wörter (nur für die Vorschläge)
+      var matched = [], seenW = {};
+      posList(r).forEach(function (p) {
+        var o = toks[p].orig;
+        if (!seenW[o.toLowerCase()]) { seenW[o.toLowerCase()] = 1; matched.push(o); }
+      });
+      var shown = matched.filter(function (o) { return !FILL[norm(o)]; });
+      r.matched = shown.length ? shown : matched;
+      r.rel = r.score / top;
+      return r;
+    });
+  }
+
+  function classify(raw, opts) {
+    opts = opts || {};
+    var a = analyze(raw);
+    return finish(applyLearned(scoreRules(a, opts), a, similar(a, liveIndex), LIVE), a, opts);
   }
 
   function lev(a, b) {
@@ -554,8 +648,194 @@ var Engine = (function () {
     return Object.keys(simToks(tokenize(p.text))).length >= 2 ? p.cleaned : "";
   }
 
+  // ------------------------------------------------------------------
+  // Auswertung mit früheren Fällen (lokal, in Etappen)
+  // ------------------------------------------------------------------
+  var VARIANTS = [
+    { id: "regeln", name: "Nur Stichwörter (ohne gelernte Fälle)", rules: true, learned: false },
+    { id: "gelernt", name: "Stichwörter + importierte Fälle (aktuelle Einstellung)", rules: true, agg: "max", w: EX_WEIGHT },
+    { id: "max20", name: "Stichwörter + importierte Fälle, Gewicht 20", rules: true, agg: "max", w: 20 },
+    { id: "max80", name: "Stichwörter + importierte Fälle, Gewicht 80", rules: true, agg: "max", w: 80 },
+    { id: "top3_20", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 20", rules: true, agg: "top3", w: 20 },
+    { id: "top3_40", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 40", rules: true, agg: "top3", w: 40 },
+    { id: "top3_80", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 80", rules: true, agg: "top3", w: 80 },
+    { id: "nurfaelle", name: "Nur importierte Fälle (ohne Stichwörter)", rules: false, agg: "max", w: EX_WEIGHT }
+  ];
+
+  function cmp(x, y) { return x < y ? -1 : x > y ? 1 : 0; }
+  function partHit(p, w) { return p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1; }
+  // Alle Wortteile der Regeln einer Klassifizierung (inkl. Bezeichnung und @Gruppen)
+  function ruleParts(c) {
+    var seen = {}, out = [];
+    c.rules.forEach(function (r) { r.terms.forEach(function (t) { t.matchers.forEach(function (l) { l.parts.forEach(function (p) {
+      if (!seen[p.m + ":" + p.w]) { seen[p.m + ":" + p.w] = 1; out.push(p); }
+    }); }); }); });
+    return out;
+  }
+  // Frische Kopie der Regel-Ergebnisse (finish/applyLearned verändern sie)
+  function cloneRes(res) {
+    var out = { results: [], byC: {} };
+    res.results.forEach(function (r) {
+      var pos = {}, k;
+      for (k in r.pos) pos[k] = 1;
+      var n = { c: r.c, score: r.score, pos: pos, byCode: r.byCode, hits: r.hits };
+      out.results.push(n); out.byC[r.c.code] = n;
+    });
+    return out;
+  }
+
+  // Misst die Genauigkeit mit früheren Fällen [{t: Text, c: Code}]: jeder Fall wird
+  // wie ein neuer Fall getestet (er selbst und Fälle mit gleichem Text zählen nicht).
+  // Die gelernten Fälle des Tools werden weder benutzt noch verändert.
+  // opts: {maxTests: 3000, minDocs: 5, details: false}
+  // Rückgabe: {step(ms) -> fertig?, progress() -> {phase, done, total}, result() -> Bericht}
+  function evaluation(cases, opts) {
+    cases = cases || []; opts = opts || {};
+    var maxTests = opts.maxTests || 3000, minDocs = opts.minDocs || 5;
+    var phase = "prepare", at = 0, usable = [], skipped = { unbekannterCode: 0, zuWenigText: 0 };
+    var codeN = {}, codeWords = {}, dfAll = Object.create(null);
+    var baseItems = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; });
+    var baseIdx = makeIndex(baseItems), evalIdx = null, tests = [], every = 1;
+    var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [];
+    var details = opts.details ? [] : null, wordCodes = [], wordsOut = [], report = null;
+    VARIANTS.forEach(function (v) { stats[v.id] = { id: v.id, name: v.name, n: 0, top1: 0, top3: 0, none: 0 }; });
+
+    // 1. Fälle vorbereiten, Wortstatistik sammeln
+    function prepOne(i) {
+      var x = cases[i] || {}, c = String(x.c == null ? "" : x.c).trim(), t = String(x.t == null ? "" : x.t);
+      if (!hasCode(c)) { skipped.unbekannterCode++; return; }
+      var a = analyze(t), st = Object.keys(queryStems(a));
+      if (st.length < 2) { skipped.zuWenigText++; return; }
+      usable.push({ i: i, t: t, c: c, key: norm(a.prep.cleaned), st: st });
+      codeN[c] = (codeN[c] || 0) + 1;
+      var cw = codeWords[c] || (codeWords[c] = Object.create(null)), seen = Object.create(null);
+      a.words.forEach(function (w) {
+        if (seen[w] || w.length < 4 || /^\d+$/.test(w) || FILL[w] || SIMSTOP[w] || STOP[w]) return;
+        seen[w] = 1; cw[w] = (cw[w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1;
+      });
+    }
+    function startTest() {
+      evalIdx = makeIndex(baseItems.concat(usable.map(function (u) {
+        return { t: u.t, c: u.c, base: false, i: u.i, key: u.key, st: u.st };
+      })));
+      every = usable.length > maxTests ? Math.ceil(usable.length / maxTests) : 1;
+      for (var j = 0; j < usable.length; j += every) tests.push(usable[j]);
+      phase = "test"; at = 0;
+    }
+    function count(m, key, obj) { (m[key] || (m[key] = obj)).n++; }
+
+    // 2. Einen Fall mit allen Varianten testen
+    function testOne(u) {
+      var a = analyze(u.t), rules = scoreRules(a, { debug: true });
+      var sims = similar(a, evalIdx, { exclude: function (e) { return !e.base && e.key === u.key; } });
+      var baseSims = similar(a, baseIdx), top = {}, first = null;
+      VARIANTS.forEach(function (v) {
+        var res = v.rules ? cloneRes(rules) : { results: [], byC: {} };
+        applyLearned(res, a, v.learned === false ? baseSims : sims, v.learned === false ? LIVE : v);
+        var picked = finish(res, a, {}), codes = picked.map(function (r) { return r.c.code; }), s = stats[v.id];
+        top[v.id] = codes;
+        if (v.id === "regeln") first = picked[0];
+        s.n++;
+        if (!codes.length) s.none++;
+        if (codes[0] === u.c) s.top1++;
+        if (codes.indexOf(u.c) !== -1) s.top3++;
+      });
+      var pc = perCode[u.c] || (perCode[u.c] = { code: u.c, n: 0, regeln: { top1: 0, top3: 0 }, gelernt: { top1: 0, top3: 0 }, wrong: {} });
+      pc.n++;
+      ["regeln", "gelernt"].forEach(function (id) {
+        var codes = top[id], got = codes[0] || "-";
+        if (got === u.c) pc[id].top1++;
+        if (codes.indexOf(u.c) !== -1) pc[id].top3++;
+        if (got !== u.c) count(conf[id], u.c + " " + got, { exp: u.c, got: got, n: 0 });
+      });
+      // falscher Platz 1 mit Stichwörtern: Code und auslösende Regeln (2 stärkste Treffer)
+      var got = top.regeln[0];
+      if (got && got !== u.c) {
+        pc.wrong[got] = (pc.wrong[got] || 0) + 1;
+        var hs = (first.hits || []).slice(0, 2), srcs = hs.map(function (h) { return h.code ? "(Code eingegeben)" : String(h.src); });
+        if (!hs.length && first.learned) srcs = ["(Beispiel)"];
+        srcs.forEach(function (rl) { count(trig, got + " " + u.c + " " + rl, { exp: u.c, got: got, rule: rl, n: 0 }); });
+      }
+      if (top.regeln.indexOf(u.c) === -1 || top.gelernt.indexOf(u.c) === -1) errors.push({ i: u.i, c: u.c, regeln: top.regeln, gelernt: top.gelernt });
+      if (details) details.push({ i: u.i, c: u.c, top: top });
+    }
+
+    // 3. Häufige Wörter je Klassifizierung
+    function startWords() {
+      evalIdx = null;
+      wordCodes = Object.keys(codeN).filter(function (c) { return codeN[c] >= minDocs; })
+        .sort(function (x, y) { return codeN[y] - codeN[x] || cmp(x, y); });
+      phase = "words"; at = 0;
+    }
+    function wordsOne(code) {
+      var n = codeN[code], cw = codeWords[code], U = usable.length, parts = ruleParts(byCode[code]);
+      var list = Object.keys(cw).filter(function (w) { return cw[w] >= minDocs; }).map(function (w) {
+        return { w: w, d: cw[w], lift: (cw[w] / n) / (dfAll[w] / U) };
+      });
+      list.sort(function (x, y) { return y.lift - x.lift || y.d - x.d || cmp(x.w, y.w); });
+      wordsOut.push({ code: code, n: n, words: list.slice(0, 15).map(function (x) {
+        return [x.w, x.d, parts.some(function (p) { return partHit(p, x.w); })];
+      }) });
+    }
+
+    function makeReport() {
+      function list(m, max, order) {
+        return Object.keys(m).map(function (k) { return m[k]; }).sort(order).slice(0, max);
+      }
+      function byN(x, y) { return y.n - x.n || cmp(x.exp, y.exp) || cmp(x.got, y.got) || cmp(x.rule || "", y.rule || ""); }
+      report = {
+        total: cases.length, usable: usable.length, skipped: skipped, tested: tests.length, sampleEvery: every,
+        variants: VARIANTS.map(function (v) { var s = stats[v.id]; return { id: v.id, name: v.name, n: s.n, top1: s.top1, top3: s.top3, none: s.none }; }),
+        perCode: Object.keys(perCode).map(function (c) {
+          var p = perCode[c];
+          return { code: c, n: p.n, regeln: p.regeln, gelernt: p.gelernt,
+            wrong: Object.keys(p.wrong).map(function (g) { return [g, p.wrong[g]]; })
+              .sort(function (x, y) { return y[1] - x[1] || cmp(x[0], y[0]); }).slice(0, 3) };
+        }).sort(function (x, y) { return y.n - x.n || cmp(x.code, y.code); }),
+        confusions: { regeln: list(conf.regeln, 30, byN), gelernt: list(conf.gelernt, 30, byN) },
+        triggers: list(trig, 40, byN),
+        words: wordsOut,
+        errors: errors
+      };
+      if (details) report.details = details;
+      phase = "done";
+    }
+
+    function unit() {
+      if (phase === "prepare") {
+        if (at < cases.length) prepOne(at++);
+        if (at >= cases.length) startTest();
+      } else if (phase === "test") {
+        if (at < tests.length) testOne(tests[at++]);
+        if (at >= tests.length) startWords();
+      } else if (phase === "words") {
+        if (at < wordCodes.length) wordsOne(wordCodes[at++]);
+        if (at >= wordCodes.length) makeReport();
+      }
+    }
+
+    return {
+      // arbeitet etwa ms Millisekunden (ohne ms: bis zum Ende); true = fertig
+      step: function (ms) {
+        var t0 = Date.now();
+        while (phase !== "done") {
+          unit();
+          if (ms != null && Date.now() - t0 >= ms) break;
+        }
+        return phase === "done";
+      },
+      progress: function () {
+        var total = phase === "prepare" ? cases.length : phase === "test" ? tests.length :
+          phase === "words" ? wordCodes.length : cases.length;
+        return { phase: phase, done: phase === "done" ? total : at, total: total };
+      },
+      result: function () { return report; }
+    };
+  }
+
   return {
     build: build, classify: classify, prepare: prepare, norm: norm, setExamples: setExamples, learnable: learnable,
+    evaluation: evaluation, VARIANTS: VARIANTS,
     get classes() { return classes; }, get byCode() { return byCode; }
   };
 })();

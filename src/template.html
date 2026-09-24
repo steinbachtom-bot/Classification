@@ -733,6 +733,7 @@
     });
   }
   function readError(err) {
+    if (err && err.encrypted) return "Diese Excel-Datei ist mit einem Passwort geschützt. Bitte in Excel ohne Passwort als .xlsx oder CSV speichern.";
     if (err && err.code === "XLS") return "Alte Excel-Datei (.xls): bitte in Excel mit „Speichern unter“ als .xlsx oder CSV speichern.";
     if (err && err.code === "ZIP") return "Diese Excel-Datei kann nicht gelesen werden (evtl. mit Passwort geschützt). Bitte als CSV speichern.";
     if (typeof DecompressionStream === "undefined") return "Dieser Browser kann .xlsx-Dateien nicht lesen. Bitte in Excel als CSV speichern oder die Zeilen kopieren und einfügen.";
@@ -748,6 +749,7 @@
       imp.format = res.format;
       var info = f.name + (res.format === "xlsx"
         ? " (Excel" + (res.sheets && res.sheets.length > 1 ? ", nur das erste Blatt „" + res.sheet + "“" : "") + ")"
+        : res.format === "html" ? " (Tabelle aus einer Webseite)"
         : " (Text, getrennt mit " + (DELIM[res.delimiter] || "?") + ")");
       loadTable(res.rows, info);
     }).catch(function (err) { impError(readError(err)); if (window.console) console.warn(err); });

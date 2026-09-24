@@ -41,8 +41,9 @@ const label = c => (E.byCode[c] ? E.byCode[c].label : '').slice(0, 38);
   }
   const t0 = Date.now();
   const ctl = E.evaluation(cases, { maxTests: Infinity, minDocs: 5 });
-  while (!ctl.step(2000)) { const p = ctl.progress(); process.stderr.write(`\r${p.phase} ${p.done}/${p.total}   `); }
-  process.stderr.write('\r' + ' '.repeat(40) + '\r');
+  const tty = process.stderr.isTTY;
+  while (!ctl.step(2000)) { const p = ctl.progress(); if (tty) process.stderr.write(`\r${p.phase} ${p.done}/${p.total}   `); }
+  if (tty) process.stderr.write('\r' + ' '.repeat(40) + '\r');
   const r = ctl.result();
   console.log(`\nGetestet ${r.tested} von ${r.usable} verwendbaren Fällen (übersprungen: ${JSON.stringify(r.skipped)}) in ${((Date.now() - t0) / 1000).toFixed(1)} s\n`);
   console.log('Methode'.padEnd(58), 'Platz 1   Top 3   kein Vorschlag');

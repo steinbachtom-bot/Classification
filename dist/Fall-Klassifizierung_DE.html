@@ -204,6 +204,43 @@
   .litem .del:hover { color: #cf222e; }
   .toast button { margin-left: 10px; font: inherit; font-weight: 700; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 6px; padding: 1px 8px; cursor: pointer; }
   .toast.show.action { pointer-events: auto; }
+
+  /* Fälle importieren und testen */
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); color: #fff; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .imp-paste textarea { min-height: 110px; font-size: 13px; padding: 10px; }
+  .imp-paste .btnrow { margin-top: 8px; }
+  .imp-err { font-size: 13px; color: #cf222e; margin: 0 0 10px; }
+  .imp-file { font-size: 13px; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+  .scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; margin: 6px 0 10px; }
+  table.tbl { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  .tbl th, .tbl td { text-align: left; vertical-align: top; padding: 5px 8px; border-top: 1px solid var(--border); }
+  .tbl thead th { border-top: 0; background: var(--surface-2); font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .tbl td.num, .tbl th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tbl code { font: 600 12px ui-monospace, Menlo, Consolas, monospace; color: var(--accent); }
+  .tbl .col-text { background: var(--accent-soft); }
+  .tbl .col-code { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .tbl.preview td { max-width: 280px; overflow-wrap: anywhere; }
+  .tbl tr.main td { font-weight: 600; }
+  .tbl select { font: inherit; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 1px 3px; margin-top: 3px; display: block; }
+  .check { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; margin: 0 0 6px; }
+  .imp-sum { font-size: 13px; margin: 4px 0 10px; }
+  .imp-sum b { font-weight: 600; }
+  .imp-prog { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+  .imp-prog progress { flex: 1; max-width: 320px; }
+  .ev h3 { font-size: 14px; margin: 18px 0 6px; }
+  .ev details { margin: 8px 0; }
+  .ev details > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+  .ev .ok { color: var(--ok); font-weight: 600; }
+  .ev .bad { color: #cf222e; }
+  .errcase { border-top: 1px solid var(--border); padding: 8px 0; font-size: 13px; }
+  .errcase .et { color: var(--muted); font-style: italic; overflow-wrap: anywhere; margin-top: 3px; }
+  .errcase .btn { font-size: 12px; padding: 2px 8px; margin-left: 6px; }
+  .words { font-size: 12.5px; line-height: 1.7; }
+  .words .new { font-weight: 600; }
+  .words .known { color: var(--faint); }
+  pre.report { font: 11.5px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -251,14 +288,45 @@
     <summary><span>Gelernte Fälle <span class="count" id="learnedCount"></span></span></summary>
     <div class="learned-body">
       <p class="note">Wenn Text im Feld steht und du einen Code kopierst (Vorschlag, Suche oder Liste), merkt sich das Tool diesen Fall. Ähnliche Texte bekommen danach diesen Code vorgeschlagen. Gespeichert wird nur der bereinigte Text (ohne Anrede, Signatur, E-Mail-Adressen, Telefonnummern und Nummern) – nur in diesem Browser.</p>
-      <p class="warn" id="storageWarn" hidden>Dieser Browser erlaubt hier kein dauerhaftes Speichern: gelernte Fälle gehen beim Schliessen verloren. Bitte regelmässig exportieren.</p>
+      <p class="warn" id="storageWarn" hidden>Gelernte Fälle können hier nicht (mehr) dauerhaft gespeichert werden – der Browser erlaubt es nicht oder der Speicher ist voll. Neue Fälle gehen beim Schliessen verloren. Bitte exportieren oder importierte Fälle löschen.</p>
       <div class="btnrow">
         <button class="btn" type="button" id="btnExport">Exportieren</button>
         <button class="btn" type="button" id="btnImport">Importieren</button>
+        <button class="btn danger" type="button" id="btnClearImported" hidden>Importierte löschen</button>
         <button class="btn danger" type="button" id="btnClear">Alle löschen</button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
       <div id="learnedList"></div>
+    </div>
+  </details>
+
+  <details class="card learned" id="impBox">
+    <summary><span>Fälle importieren und testen</span></summary>
+    <div class="learned-body">
+      <p class="note">Frühere Fälle aus Excel oder CSV laden: eine Spalte mit dem Text (Notiz oder Kundennachricht) und eine Spalte mit der Klassifizierung. Damit kann das Tool <b>seine Genauigkeit an echten Fällen messen</b> und die Fälle <b>auf einmal lernen</b>. Alles passiert in diesem Browser – es wird nichts gesendet.</p>
+      <div class="btnrow">
+        <button class="btn" type="button" id="btnImpFile">Datei wählen (.xlsx, .csv)</button>
+        <button class="btn" type="button" id="btnImpPaste">Aus Excel einfügen</button>
+        <input type="file" id="impFile" accept=".xlsx,.xls,.csv,.txt,.tsv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      </div>
+      <div class="imp-paste" id="impPasteBox" hidden>
+        <textarea id="impPaste" spellcheck="false" placeholder="In Excel die Spalten mit Text und Klassifizierung markieren (mit Überschriften), kopieren (Ctrl+C) und hier einfügen (Ctrl+V)"></textarea>
+        <div class="btnrow"><button class="btn" type="button" id="btnImpPasteOk">Eingefügte Zeilen übernehmen</button></div>
+      </div>
+      <p class="imp-err" id="impErr" hidden></p>
+      <div id="impMap" hidden>
+        <p class="imp-file" id="impFileInfo"></p>
+        <label class="check"><input type="checkbox" id="impHeader"> Erste Zeile enthält Spaltennamen</label>
+        <p class="note">Für jede Spalte wählen: <b>Text</b> (auch mehrere, z.B. Betreff und Beschreibung) und genau eine Spalte <b>Klassifizierung</b> (Code, z.B. 50410, oder Bezeichnung).</p>
+        <div class="scroll"><table class="tbl preview" id="impPreview"></table></div>
+        <div class="imp-sum" id="impSum"></div>
+        <div class="btnrow">
+          <button class="btn primary" type="button" id="btnEval" disabled>Genauigkeit testen</button>
+          <button class="btn" type="button" id="btnLearnAll" disabled>Alle als gelernte Fälle übernehmen</button>
+        </div>
+        <div class="imp-prog" id="impProg" hidden><progress id="impProgBar" max="1" value="0"></progress><span id="impProgTxt"></span><button class="btn" type="button" id="btnEvalStop">Abbrechen</button></div>
+        <div class="ev" id="evalOut"></div>
+      </div>
     </div>
   </details>
 
@@ -811,7 +879,7 @@ var Engine = (function () {
     return { key: mod + words.join(" "), parts: words.map(function (w) { return { w: w, m: modeFor(w, mod) }; }) };
   }
 
-  var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [];
+  var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [], nLit = 0, nPart = 0;
 
   function build(SYN, TEXT, ALT, ABK, BASE) {
     groups = {}; classes = []; byCode = {}; idf = {}; errors = []; abk = [];
@@ -875,6 +943,19 @@ var Engine = (function () {
     var N = classes.length;
     Object.keys(df).forEach(function (k) { idf[k] = Math.log(1 + N / df[k]); });
 
+    // Literale und Wortteile durchnummerieren (Zwischenspeicher je Text als Array)
+    var litIds = Object.create(null), partIds = Object.create(null);
+    nLit = 0; nPart = 0;
+    classes.forEach(function (c) { c.rules.forEach(function (r) { r.terms.concat(r.neg).forEach(function (t) {
+      t.matchers.forEach(function (l) {
+        l.id = litIds[l.key] !== undefined ? litIds[l.key] : (litIds[l.key] = nLit++);
+        l.parts.forEach(function (p) {
+          var k = p.m + ":" + p.w;
+          p.id = partIds[k] !== undefined ? partIds[k] : (partIds[k] = nPart++);
+        });
+      });
+    }); }); });
+
     // Abkürzungen: nur Grossbuchstaben = Gross-/Kleinschreibung beachten
     if (ABK) Object.keys(ABK).sort(function (a, b) { return b.length - a.length; }).forEach(function (k) {
       var cs = !/[a-zäöüß]/.test(k);
@@ -882,8 +963,8 @@ var Engine = (function () {
       abk.push({ re: new RegExp("(^|[^\\p{L}\\p{N}])" + esc + "(?![\\p{L}\\p{N}:])", cs ? "gu" : "giu"), to: ABK[k] });
     });
 
-    featCache = {};
-    baseExamples = (BASE || []).filter(function (e) { return e && e.t && byCode[e.c]; });
+    featCache = Object.create(null);
+    baseExamples = (BASE || []).filter(validEx);
     setExamples(learnedExamples);
     return { classes: classes, errors: errors };
   }
@@ -1021,7 +1102,10 @@ var Engine = (function () {
   // ------------------------------------------------------------------
   // Gelernte Fälle
   // ------------------------------------------------------------------
-  var baseExamples = [], learnedExamples = [], exItems = [], exDf = {}, exN = 0, featCache = {};
+  var baseExamples = [], learnedExamples = [], featCache = Object.create(null);
+  var LIVE = { agg: "max", w: EX_WEIGHT };   // Einstellung im Tool
+  var TOP3 = [1, 0.5, 0.25];                 // Gewichte bei agg "top3"
+  var liveIndex = makeIndex([]);
   var SUF = ["ungen", "ung", "en", "er", "es", "em", "e", "n", "s", "t"];
   function stem(w) {
     for (var i = 0; i < SUF.length; i++) {
@@ -1042,47 +1126,134 @@ var Engine = (function () {
     });
     return o;
   }
-  function setExamples(learned) {
-    learnedExamples = (learned || []).filter(function (e) { return e && e.t && byCode[e.c]; });
-    var all = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; })
-      .concat(learnedExamples.map(function (e) { return { t: e.t, c: e.c, base: false }; }));
-    exItems = []; exDf = {};
-    all.forEach(function (e) {
-      var st = featCache[e.t] || (featCache[e.t] = Object.keys(simToks(tokenize(prepare(e.t).text))));
+  function hasCode(c) { return Object.prototype.hasOwnProperty.call(byCode, c); }
+  function validEx(e) { return e && e.t && hasCode(e.c); }
+
+  // Index über Beispiele: Stämme, IDF, Norm und Postings (Stamm -> Beispiele),
+  // damit nur Beispiele mit gemeinsamen Stämmen verglichen werden.
+  // items: [{t, c, base, st?, ...}] – ohne st werden die Stämme aus t berechnet
+  function makeIndex(items) {
+    var ix = { items: [], df: {}, idf: {}, N: 0, post: {} };
+    (items || []).forEach(function (e) {
+      var st = e.st || featCache[e.t] || (featCache[e.t] = Object.keys(simToks(tokenize(prepare(e.t).text))));
       if (!st.length) return;
-      exItems.push({ t: e.t, c: e.c, base: e.base, st: st });
-      st.forEach(function (s) { exDf[s] = (exDf[s] || 0) + 1; });
+      var it = {}, n = ix.items.length, k;
+      for (k in e) if (Object.prototype.hasOwnProperty.call(e, k)) it[k] = e[k];
+      it.st = st;
+      ix.items.push(it);
+      st.forEach(function (s) { ix.df[s] = (ix.df[s] || 0) + 1; (ix.post[s] || (ix.post[s] = [])).push(n); });
     });
-    exN = exItems.length;
-    exItems.forEach(function (e) {
-      var n = 0; e.st.forEach(function (s) { var v = exIdf(s); n += v * v; }); e.norm = Math.sqrt(n);
+    var N = ix.N = ix.items.length;
+    Object.keys(ix.df).forEach(function (s) { ix.idf[s] = Math.log(1 + (N + 1) / (ix.df[s] + 0.5)); });
+    ix.items.forEach(function (e) {
+      var n = 0; e.st.forEach(function (s) { var v = ix.idf[s]; n += v * v; }); e.norm = Math.sqrt(n);
     });
-    return exN;
+    return ix;
   }
-  function exIdf(s) { return Math.log(1 + (exN + 1) / ((exDf[s] || 0) + 0.5)); }
+  function idfOf(ix, s) { var v = ix.idf[s]; return v !== undefined ? v : Math.log(1 + (ix.N + 1) / 0.5); }
+
+  function setExamples(learned) {
+    learnedExamples = (learned || []).filter(validEx);
+    liveIndex = makeIndex(baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; })
+      .concat(learnedExamples.map(function (e) { return { t: e.t, c: e.c, base: false }; })));
+    return liveIndex.N;
+  }
+
+  // Stämme des Suchtextes (Stamm -> Wortpositionen), einmal je Analyse
+  function queryStems(a) { return a.qs || (a.qs = simToks(a.toks)); }
+
+  // Ähnliche Beispiele (Kosinus über IDF-gewichtete Stämme). Nur Beispiele über
+  // EX_MIN und mit mindestens 2 gemeinsamen Wörtern (oder Ähnlichkeit ab 0.6).
+  // opts.exclude(item) -> true: Beispiel überspringen. Ergebnis: [{e, sim, common}]
+  function similar(a, ix, opts) {
+    var out = [];
+    if (!ix || !ix.N) return out;
+    var qs = queryStems(a), qn = 0, cand = [], seen = {}, excl = opts && opts.exclude;
+    Object.keys(qs).forEach(function (s) {
+      var v = idfOf(ix, s), p = ix.post[s], j;
+      qn += v * v;
+      if (p) for (j = 0; j < p.length; j++) if (!seen[p[j]]) { seen[p[j]] = 1; cand.push(p[j]); }
+    });
+    qn = Math.sqrt(qn);
+    if (!qn) return out;
+    cand.sort(function (x, y) { return x - y; });   // Reihenfolge des Index (bei Gleichstand gewinnt das erste)
+    cand.forEach(function (n) {
+      var e = ix.items[n];
+      if (excl && excl(e)) return;
+      var dot = 0, common = [], words = {}, nw = 0;
+      e.st.forEach(function (s) {
+        if (!qs[s]) return;
+        var v = ix.idf[s]; dot += v * v; common.push(s);
+        qs[s].forEach(function (p) { if (!words[p]) { words[p] = 1; nw++; } });
+      });
+      if (!dot) return;
+      var sim = dot / (qn * e.norm);
+      if (nw < 2 && sim < 0.6) return;   // ein einziges gemeinsames Wort reicht meist nicht
+      if (sim > EX_MIN) out.push({ e: e, sim: sim, common: common });
+    });
+    return out;
+  }
+
+  // Bonus der ähnlichen Beispiele je Code. v.agg "max": bestes Beispiel zählt;
+  // "top3": bis zu 3 beste Beispiele, gewichtet 1 : 0.5 : 0.25. v.w = Gewicht
+  function applyLearned(res, a, sims, v) {
+    if (!sims.length) return res;
+    var qs = queryStems(a), per = {};
+    sims.forEach(function (x) { (per[x.e.c] || (per[x.e.c] = [])).push(x); });
+    Object.keys(per).forEach(function (code) {
+      var list = per[code], used, bonus, b, i;
+      if (v.agg === "top3") {
+        used = list.slice().sort(function (x, y) { return y.sim - x.sim; }).slice(0, 3);
+        bonus = 0;
+        for (i = 0; i < used.length; i++) bonus += TOP3[i] * ((used[i].sim - EX_MIN) / (1 - EX_MIN));
+        bonus = v.w * bonus / 1.75;
+      } else {
+        b = list[0];
+        for (i = 1; i < list.length; i++) if (list[i].sim > b.sim) b = list[i];
+        used = [b];
+        bonus = v.w * (b.sim - EX_MIN) / (1 - EX_MIN);
+      }
+      b = used[0];
+      var r = res.byC[code];
+      if (!r) { r = { c: byCode[code], score: 0, pos: {}, byCode: false }; res.results.push(r); res.byC[code] = r; }
+      r.score += bonus;
+      r.learned = { sim: b.sim, text: b.e.t, base: b.e.base };
+      used.forEach(function (x) { x.common.forEach(function (s) { qs[s].forEach(function (p) { r.pos[p] = 1; }); }); });
+    });
+    return res;
+  }
 
   // ------------------------------------------------------------------
   // Klassifizieren
   // ------------------------------------------------------------------
-  function classify(raw, opts) {
-    opts = opts || {};
-    var prep = prepare(raw);
-    var toks = tokenize(prep.text);
+  // Text bereinigen und in Wörter/Sätze zerlegen
+  function analyze(raw) {
+    var prep = prepare(raw), toks = tokenize(prep.text);
     var words = toks.map(function (t) { return t.w; });
-    var rawWords = norm(raw).split(" ").filter(Boolean);
-    var partCache = {}, litCache = {};
-    var longText = words.filter(function (w) { return !FILL[w]; }).length > 20;
+    return { prep: prep, toks: toks, words: words, rawWords: norm(raw).split(" ").filter(Boolean),
+      longText: words.filter(function (w) { return !FILL[w]; }).length > 20 };
+  }
+
+  // Stichwort-Regeln je Klassifizierung (unsortiert, ohne gelernte Fälle).
+  // Ergebnis: {results: [{c, score, pos, byCode, hits}], byC: Code -> Ergebnis}
+  function scoreRules(a, opts) {
+    opts = opts || {};
+    var toks = a.toks, words = a.words, rawWords = a.rawWords, longText = a.longText;
+    var partCache = new Array(nPart), litCache = new Array(nLit);   // je Literal-Schlüssel bzw. Modus+Wort
+    var SEP = "\u0001", joined = SEP + words.join(SEP) + SEP;   // für den Schnelltest in partPos
 
     function partPos(p) {
-      var k = p.m + ":" + p.w;
-      if (partCache[k]) return partCache[k];
+      if (partCache[p.id]) return partCache[p.id];
       var pos = [], i, w;
-      for (i = 0; i < words.length; i++) {
-        w = words[i];
-        if (p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1) pos.push(i);
+      // Schnelltest: kommt das Wort(-stück) überhaupt vor?
+      if (joined.indexOf(p.m === "x" ? SEP + p.w + SEP : p.m === "p" ? SEP + p.w : p.w) !== -1) {
+        for (i = 0; i < words.length; i++) {
+          w = words[i];
+          if (p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1) pos.push(i);
+        }
       }
       var fuzzy = false;
-      if (!pos.length && p.m !== "x" && p.w.length >= 8) {       // Tippfehler tolerieren (nur lange Wörter)
+      if (!pos.length && p.m !== "x" && p.w.length >= 8 && joined.indexOf(SEP + p.w.slice(0, 2)) !== -1) {   // Tippfehler tolerieren (nur lange Wörter)
         var L = p.w.length;
         for (i = 0; i < words.length; i++) {
           w = words[i];
@@ -1091,11 +1262,11 @@ var Engine = (function () {
         }
         fuzzy = pos.length > 0;
       }
-      return (partCache[k] = { pos: pos, fuzzy: fuzzy });
+      return (partCache[p.id] = { pos: pos, fuzzy: fuzzy });
     }
 
     function litMatch(lit) {
-      if (litCache.hasOwnProperty(lit.key)) return litCache[lit.key];
+      if (litCache[lit.id] !== undefined) return litCache[lit.id];
       var res = null;
       if (lit.parts.length === 1) {
         var r = partPos(lit.parts[0]);
@@ -1135,7 +1306,7 @@ var Engine = (function () {
           if (all.length) res = { pos: all, fuzzy: lists.some(function (l) { return l.fuzzy; }) };
         }
       }
-      return (litCache[lit.key] = res);
+      return (litCache[lit.id] = res);
     }
 
     function termMatch(t) {
@@ -1197,8 +1368,7 @@ var Engine = (function () {
         var w = tot * fac * m.f * (m.fuzzy ? 0.75 : 1) * (r.terms.length > 1 ? 1.15 : 1);
         hits.push({ w: w, pos: m.pos, src: r.src || (r.terms[0] && r.terms[0].key) });
       });
-      var ci = rawWords.indexOf(norm(c.code));
-      if (rawWords.length <= 3 && ci !== -1) hits.push({ w: 100, pos: [], code: true });
+      if (rawWords.length <= 3 && rawWords.indexOf(norm(c.code)) !== -1) hits.push({ w: 100, pos: [], code: true });
       if (!hits.length) return;
       hits.sort(function (a, b) { return b.w - a.w; });
       var score = hits[0].w, allPos = {};
@@ -1207,42 +1377,17 @@ var Engine = (function () {
       var r = { c: c, score: score, pos: allPos, byCode: !!hits[0].code, hits: opts.debug ? hits : undefined };
       results.push(r); byC[c.code] = r;
     });
+    return { results: results, byC: byC };
+  }
 
-    // Ähnlichkeit mit gelernten Fällen
-    if (exN) {
-      var qs = simToks(toks), qk = Object.keys(qs), qn = 0;
-      qk.forEach(function (s) { var v = exIdf(s); qn += v * v; });
-      qn = Math.sqrt(qn);
-      var bestEx = {};
-      var qWords = {};
-      qk.forEach(function (s) { qs[s].forEach(function (p) { qWords[p] = 1; }); });
-      if (qn) exItems.forEach(function (e) {
-        var dot = 0, common = [], words = {};
-        e.st.forEach(function (s) { if (qs[s]) { var v = exIdf(s); dot += v * v; common.push(s); qs[s].forEach(function (p) { words[p] = 1; }); } });
-        if (!dot) return;
-        var sim = dot / (qn * e.norm);
-        if (Object.keys(words).length < 2 && sim < 0.6) return;   // ein einziges gemeinsames Wort reicht meist nicht
-        if (sim > EX_MIN && (!bestEx[e.c] || sim > bestEx[e.c].sim)) bestEx[e.c] = { sim: sim, ex: e, common: common };
-      });
-      Object.keys(bestEx).forEach(function (code) {
-        var b = bestEx[code], r = byC[code];
-        if (!r) { r = { c: byCode[code], score: 0, pos: {}, byCode: false }; results.push(r); byC[code] = r; }
-        r.score += EX_WEIGHT * (b.sim - EX_MIN) / (1 - EX_MIN);
-        r.learned = { sim: b.sim, text: b.ex.t, base: b.ex.base };
-        b.common.forEach(function (s) { qs[s].forEach(function (p) { r.pos[p] = 1; }); });
-      });
-    }
-
+  // Auswahl: sortieren, Schwellen (minAbs, rel), höchstens max Vorschläge,
+  // bei mehreren Problemen möglichst verschiedene
+  function finish(res, a, opts) {
+    opts = opts || {};
+    var results = res.results, toks = a.toks;
+    function posList(r) { return Object.keys(r.pos).map(Number).sort(function (a, b) { return a - b; }); }
     results.forEach(function (r) {
-      var posList = Object.keys(r.pos).map(Number).sort(function (a, b) { return a - b; });
-      var matched = [], seenW = {}, content = [];
-      posList.forEach(function (p) {
-        var o = toks[p].orig;
-        if (!seenW[o.toLowerCase()]) { seenW[o.toLowerCase()] = 1; matched.push(o); }
-        if (!FILL[toks[p].w]) content.push(p);
-      });
-      var shown = matched.filter(function (o) { return !FILL[norm(o)]; });
-      r.matched = shown.length ? shown : matched; r.content = content;
+      r.content = posList(r).filter(function (p) { return !FILL[toks[p].w]; });
     });
 
     results.sort(function (a, b) {
@@ -1271,7 +1416,24 @@ var Engine = (function () {
       groupsUsed[pick.c.bereich + pick.c.gruppe] = 1;
       picked.push(pick);
     }
-    return picked.map(function (r) { r.rel = r.score / top; return r; });
+    return picked.map(function (r) {
+      // erkannte Wörter (nur für die Vorschläge)
+      var matched = [], seenW = {};
+      posList(r).forEach(function (p) {
+        var o = toks[p].orig;
+        if (!seenW[o.toLowerCase()]) { seenW[o.toLowerCase()] = 1; matched.push(o); }
+      });
+      var shown = matched.filter(function (o) { return !FILL[norm(o)]; });
+      r.matched = shown.length ? shown : matched;
+      r.rel = r.score / top;
+      return r;
+    });
+  }
+
+  function classify(raw, opts) {
+    opts = opts || {};
+    var a = analyze(raw);
+    return finish(applyLearned(scoreRules(a, opts), a, similar(a, liveIndex), LIVE), a, opts);
   }
 
   function lev(a, b) {
@@ -1292,9 +1454,664 @@ var Engine = (function () {
     return Object.keys(simToks(tokenize(p.text))).length >= 2 ? p.cleaned : "";
   }
 
+  // ------------------------------------------------------------------
+  // Auswertung mit früheren Fällen (lokal, in Etappen)
+  // ------------------------------------------------------------------
+  var VARIANTS = [
+    { id: "regeln", name: "Nur Stichwörter (ohne gelernte Fälle)", rules: true, learned: false },
+    { id: "gelernt", name: "Stichwörter + importierte Fälle (aktuelle Einstellung)", rules: true, agg: "max", w: EX_WEIGHT },
+    { id: "max20", name: "Stichwörter + importierte Fälle, Gewicht 20", rules: true, agg: "max", w: 20 },
+    { id: "max80", name: "Stichwörter + importierte Fälle, Gewicht 80", rules: true, agg: "max", w: 80 },
+    { id: "top3_20", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 20", rules: true, agg: "top3", w: 20 },
+    { id: "top3_40", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 40", rules: true, agg: "top3", w: 40 },
+    { id: "top3_80", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 80", rules: true, agg: "top3", w: 80 },
+    { id: "nurfaelle", name: "Nur importierte Fälle (ohne Stichwörter)", rules: false, agg: "max", w: EX_WEIGHT }
+  ];
+
+  function cmp(x, y) { return x < y ? -1 : x > y ? 1 : 0; }
+  function partHit(p, w) { return p.m === "x" ? w === p.w : p.m === "p" ? w.indexOf(p.w) === 0 : w.indexOf(p.w) !== -1; }
+  // Alle Wortteile der Regeln einer Klassifizierung (inkl. Bezeichnung und @Gruppen)
+  function ruleParts(c) {
+    var seen = {}, out = [];
+    c.rules.forEach(function (r) { r.terms.forEach(function (t) { t.matchers.forEach(function (l) { l.parts.forEach(function (p) {
+      if (!seen[p.m + ":" + p.w]) { seen[p.m + ":" + p.w] = 1; out.push(p); }
+    }); }); }); });
+    return out;
+  }
+  // Frische Kopie der Regel-Ergebnisse (finish/applyLearned verändern sie)
+  function cloneRes(res) {
+    var out = { results: [], byC: {} };
+    res.results.forEach(function (r) {
+      var pos = {}, k;
+      for (k in r.pos) pos[k] = 1;
+      var n = { c: r.c, score: r.score, pos: pos, byCode: r.byCode, hits: r.hits };
+      out.results.push(n); out.byC[r.c.code] = n;
+    });
+    return out;
+  }
+
+  // Misst die Genauigkeit mit früheren Fällen [{t: Text, c: Code}]: jeder Fall wird
+  // wie ein neuer Fall getestet (er selbst und Fälle mit gleichem Text zählen nicht).
+  // Die gelernten Fälle des Tools werden weder benutzt noch verändert.
+  // opts: {maxTests: 3000, minDocs: 5, details: false}
+  // Rückgabe: {step(ms) -> fertig?, progress() -> {phase, done, total}, result() -> Bericht}
+  function evaluation(cases, opts) {
+    cases = cases || []; opts = opts || {};
+    var maxTests = opts.maxTests || 3000, minDocs = opts.minDocs || 5;
+    var phase = "prepare", at = 0, usable = [], skipped = { unbekannterCode: 0, zuWenigText: 0 };
+    var codeN = {}, codeWords = {}, dfAll = Object.create(null);
+    var baseItems = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; });
+    var baseIdx = makeIndex(baseItems), evalIdx = null, tests = [], every = 1;
+    var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [];
+    var details = opts.details ? [] : null, wordCodes = [], wordsOut = [], report = null;
+    VARIANTS.forEach(function (v) { stats[v.id] = { id: v.id, name: v.name, n: 0, top1: 0, top3: 0, none: 0 }; });
+
+    // 1. Fälle vorbereiten, Wortstatistik sammeln
+    function prepOne(i) {
+      var x = cases[i] || {}, c = String(x.c == null ? "" : x.c).trim(), t = String(x.t == null ? "" : x.t);
+      if (!hasCode(c)) { skipped.unbekannterCode++; return; }
+      var a = analyze(t), st = Object.keys(queryStems(a));
+      if (st.length < 2) { skipped.zuWenigText++; return; }
+      usable.push({ i: i, t: t, c: c, key: norm(a.prep.cleaned), st: st });
+      codeN[c] = (codeN[c] || 0) + 1;
+      var cw = codeWords[c] || (codeWords[c] = Object.create(null)), seen = Object.create(null);
+      a.words.forEach(function (w) {
+        if (seen[w] || w.length < 4 || /^\d+$/.test(w) || FILL[w] || SIMSTOP[w] || STOP[w]) return;
+        seen[w] = 1; cw[w] = (cw[w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1;
+      });
+    }
+    function startTest() {
+      evalIdx = makeIndex(baseItems.concat(usable.map(function (u) {
+        return { t: u.t, c: u.c, base: false, i: u.i, key: u.key, st: u.st };
+      })));
+      every = usable.length > maxTests ? Math.ceil(usable.length / maxTests) : 1;
+      for (var j = 0; j < usable.length; j += every) tests.push(usable[j]);
+      phase = "test"; at = 0;
+    }
+    function count(m, key, obj) { (m[key] || (m[key] = obj)).n++; }
+
+    // 2. Einen Fall mit allen Varianten testen
+    function testOne(u) {
+      var a = analyze(u.t), rules = scoreRules(a, { debug: true });
+      var sims = similar(a, evalIdx, { exclude: function (e) { return !e.base && e.key === u.key; } });
+      var baseSims = similar(a, baseIdx), top = {}, first = null;
+      VARIANTS.forEach(function (v) {
+        var res = v.rules ? cloneRes(rules) : { results: [], byC: {} };
+        applyLearned(res, a, v.learned === false ? baseSims : sims, v.learned === false ? LIVE : v);
+        var picked = finish(res, a, {}), codes = picked.map(function (r) { return r.c.code; }), s = stats[v.id];
+        top[v.id] = codes;
+        if (v.id === "regeln") first = picked[0];
+        s.n++;
+        if (!codes.length) s.none++;
+        if (codes[0] === u.c) s.top1++;
+        if (codes.indexOf(u.c) !== -1) s.top3++;
+      });
+      var pc = perCode[u.c] || (perCode[u.c] = { code: u.c, n: 0, regeln: { top1: 0, top3: 0 }, gelernt: { top1: 0, top3: 0 }, wrong: {} });
+      pc.n++;
+      ["regeln", "gelernt"].forEach(function (id) {
+        var codes = top[id], got = codes[0] || "-";
+        if (got === u.c) pc[id].top1++;
+        if (codes.indexOf(u.c) !== -1) pc[id].top3++;
+        if (got !== u.c) count(conf[id], u.c + " " + got, { exp: u.c, got: got, n: 0 });
+      });
+      // falscher Platz 1 mit Stichwörtern: Code und auslösende Regeln (2 stärkste Treffer)
+      var got = top.regeln[0];
+      if (got && got !== u.c) {
+        pc.wrong[got] = (pc.wrong[got] || 0) + 1;
+        var hs = (first.hits || []).slice(0, 2), srcs = hs.map(function (h) { return h.code ? "(Code eingegeben)" : String(h.src); });
+        if (!hs.length && first.learned) srcs = ["(Beispiel)"];
+        srcs.forEach(function (rl) { count(trig, got + " " + u.c + " " + rl, { exp: u.c, got: got, rule: rl, n: 0 }); });
+      }
+      if (top.regeln.indexOf(u.c) === -1 || top.gelernt.indexOf(u.c) === -1) errors.push({ i: u.i, c: u.c, regeln: top.regeln, gelernt: top.gelernt });
+      if (details) details.push({ i: u.i, c: u.c, top: top });
+    }
+
+    // 3. Häufige Wörter je Klassifizierung
+    function startWords() {
+      evalIdx = null;
+      wordCodes = Object.keys(codeN).filter(function (c) { return codeN[c] >= minDocs; })
+        .sort(function (x, y) { return codeN[y] - codeN[x] || cmp(x, y); });
+      phase = "words"; at = 0;
+    }
+    function wordsOne(code) {
+      var n = codeN[code], cw = codeWords[code], U = usable.length, parts = ruleParts(byCode[code]);
+      var list = Object.keys(cw).filter(function (w) { return cw[w] >= minDocs; }).map(function (w) {
+        return { w: w, d: cw[w], lift: (cw[w] / n) / (dfAll[w] / U) };
+      });
+      list.sort(function (x, y) { return y.lift - x.lift || y.d - x.d || cmp(x.w, y.w); });
+      wordsOut.push({ code: code, n: n, words: list.slice(0, 15).map(function (x) {
+        return [x.w, x.d, parts.some(function (p) { return partHit(p, x.w); })];
+      }) });
+    }
+
+    function makeReport() {
+      function list(m, max, order) {
+        return Object.keys(m).map(function (k) { return m[k]; }).sort(order).slice(0, max);
+      }
+      function byN(x, y) { return y.n - x.n || cmp(x.exp, y.exp) || cmp(x.got, y.got) || cmp(x.rule || "", y.rule || ""); }
+      report = {
+        total: cases.length, usable: usable.length, skipped: skipped, tested: tests.length, sampleEvery: every,
+        variants: VARIANTS.map(function (v) { var s = stats[v.id]; return { id: v.id, name: v.name, n: s.n, top1: s.top1, top3: s.top3, none: s.none }; }),
+        perCode: Object.keys(perCode).map(function (c) {
+          var p = perCode[c];
+          return { code: c, n: p.n, regeln: p.regeln, gelernt: p.gelernt,
+            wrong: Object.keys(p.wrong).map(function (g) { return [g, p.wrong[g]]; })
+              .sort(function (x, y) { return y[1] - x[1] || cmp(x[0], y[0]); }).slice(0, 3) };
+        }).sort(function (x, y) { return y.n - x.n || cmp(x.code, y.code); }),
+        confusions: { regeln: list(conf.regeln, 30, byN), gelernt: list(conf.gelernt, 30, byN) },
+        triggers: list(trig, 40, byN),
+        words: wordsOut,
+        errors: errors
+      };
+      if (details) report.details = details;
+      phase = "done";
+    }
+
+    function unit() {
+      if (phase === "prepare") {
+        if (at < cases.length) prepOne(at++);
+        if (at >= cases.length) startTest();
+      } else if (phase === "test") {
+        if (at < tests.length) testOne(tests[at++]);
+        if (at >= tests.length) startWords();
+      } else if (phase === "words") {
+        if (at < wordCodes.length) wordsOne(wordCodes[at++]);
+        if (at >= wordCodes.length) makeReport();
+      }
+    }
+
+    return {
+      // arbeitet etwa ms Millisekunden (ohne ms: bis zum Ende); true = fertig
+      step: function (ms) {
+        var t0 = Date.now();
+        while (phase !== "done") {
+          unit();
+          if (ms != null && Date.now() - t0 >= ms) break;
+        }
+        return phase === "done";
+      },
+      progress: function () {
+        var total = phase === "prepare" ? cases.length : phase === "test" ? tests.length :
+          phase === "words" ? wordCodes.length : cases.length;
+        return { phase: phase, done: phase === "done" ? total : at, total: total };
+      },
+      result: function () { return report; }
+    };
+  }
+
   return {
     build: build, classify: classify, prepare: prepare, norm: norm, setExamples: setExamples, learnable: learnable,
+    evaluation: evaluation, VARIANTS: VARIANTS,
     get classes() { return classes; }, get byCode() { return byCode; }
+  };
+})();
+
+
+</script>
+<script>
+/* =====================================================================
+   TABELLEN-IMPORT – liest importierte Dateien mit früheren Fällen
+   ---------------------------------------------------------------------
+   Alles läuft lokal (Browser oder Node), nichts wird verschickt.
+   1. Text-Dateien (CSV/TSV, auch aus Excel kopiert): Zeichensatz und
+      Trennzeichen werden erkannt, Felder nach RFC 4180 gelesen
+   2. Excel (.xlsx): kleiner ZIP-Leser, XML per Textsuche (kein DOMParser),
+      es wird das erste Tabellenblatt gelesen. Altes .xls wird abgelehnt.
+   3. Spalten erraten (Text / Klassifizierung) und Zeilen in
+      Lernbeispiele { t, c } umwandeln
+   ===================================================================== */
+var Table = (function () {
+  function fail(code, msg) { var e = new Error(msg); e.code = code; return e; }
+  function bytesOf(b) {
+    if (b instanceof Uint8Array) return b;
+    if (ArrayBuffer.isView(b)) return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+    return new Uint8Array(b);
+  }
+  function str(v) { return v == null ? "" : String(v); }
+  function blank(v) { return !str(v).trim(); }
+  function cell(r, i) { return str(r && r[i]); }
+  function pad(rows) {
+    var w = 0;
+    rows.forEach(function (r) { if (r.length > w) w = r.length; });
+    rows.forEach(function (r) { while (r.length < w) r.push(""); });
+    return rows;
+  }
+
+  /* ---------- Zeichensatz ---------- */
+  // windows-1252: Zeichen 0x80–0x9F (Rest wie Latin-1)
+  var CP1252 = [0x20AC, 0x81, 0x201A, 0x192, 0x201E, 0x2026, 0x2020, 0x2021, 0x2C6, 0x2030, 0x160, 0x2039, 0x152, 0x8D, 0x17D, 0x8F,
+    0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x2DC, 0x2122, 0x161, 0x203A, 0x153, 0x9D, 0x17E, 0x178];
+
+  // n Zeichencodes -> String (stückweise wegen der Argument-Grenze von apply)
+  function chars(n, at) {
+    var s = "", buf = [], i;
+    for (i = 0; i < n; i++) {
+      buf.push(at(i));
+      if (buf.length === 8192) { s += String.fromCharCode.apply(null, buf); buf = []; }
+    }
+    return s + String.fromCharCode.apply(null, buf);
+  }
+  function utf8(u) { return new TextDecoder("utf-8").decode(u); }
+  function utf16(u, be) {
+    try { return new TextDecoder(be ? "utf-16be" : "utf-16le").decode(u); } catch (e) { /* Ersatz unten */ }
+    return chars(u.length >> 1, function (i) { var a = u[2 * i], b = u[2 * i + 1]; return be ? a << 8 | b : b << 8 | a; });
+  }
+  function cp1252(u) {
+    try { return new TextDecoder("windows-1252").decode(u); } catch (e) { /* Ersatz unten */ }
+    return chars(u.length, function (i) { var b = u[i]; return b >= 0x80 && b < 0xA0 ? CP1252[b - 0x80] : b; });
+  }
+
+  // Bytes -> Text: BOM, sonst UTF-16 (viele Nullbytes), UTF-8, sonst windows-1252 (Excel "CSV" aus der Schweiz)
+  function decode(bytes) {
+    var u = bytesOf(bytes), s, n = Math.min(u.length, 200) >> 1, z0 = 0, z1 = 0, i;
+    if (u[0] === 0xEF && u[1] === 0xBB && u[2] === 0xBF) s = utf8(u.subarray(3));
+    else if (u[0] === 0xFF && u[1] === 0xFE) s = utf16(u.subarray(2), false);
+    else if (u[0] === 0xFE && u[1] === 0xFF) s = utf16(u.subarray(2), true);
+    else {
+      for (i = 0; i < n; i++) { if (!u[2 * i]) z0++; if (!u[2 * i + 1]) z1++; }
+      if (n >= 2 && z1 >= n * 0.3 && z0 <= n * 0.1) s = utf16(u, false);
+      else if (n >= 2 && z0 >= n * 0.3 && z1 <= n * 0.1) s = utf16(u, true);
+      else {
+        try { s = new TextDecoder("utf-8", { fatal: true }).decode(u); } catch (e) { s = cp1252(u); }
+      }
+    }
+    return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+  }
+
+  /* ---------- CSV / TSV ---------- */
+  var DELIMS = ["\t", ";", ",", "|"];
+
+  // Datensätze nach RFC 4180 lesen ("" = Anführungszeichen, Trenner und Zeilenumbruch in "..." erlaubt)
+  function records(text, d, max) {
+    var rows = [], row = [], n = text.length, dc = d.charCodeAt(0), i = 0, j, c, f;
+    if (!n) return rows;
+    for (;;) {
+      f = "";
+      if (text.charCodeAt(i) === 34) {
+        for (i++; ;) {
+          j = text.indexOf("\"", i);
+          if (j < 0) { f += text.slice(i); i = n; break; }
+          f += text.slice(i, j);
+          if (text.charCodeAt(j + 1) === 34) { f += "\""; i = j + 2; } else { i = j + 1; break; }
+        }
+        f = f.replace(/\r\n?/g, "\n");
+      }
+      // ohne Anführungszeichen (oder Rest nach dem schliessenden ") bis zum Trenner
+      for (j = i; j < n; j++) { c = text.charCodeAt(j); if (c === dc || c === 10 || c === 13) break; }
+      row.push(f + text.slice(i, j));
+      i = j;
+      if (i >= n) { rows.push(row); return rows; }
+      c = text.charCodeAt(i++);
+      if (c === dc) continue;
+      if (c === 13 && text.charCodeAt(i) === 10) i++;
+      rows.push(row); row = [];
+      if (i >= n || rows.length === max) return rows;
+    }
+  }
+
+  // Trennzeichen: kommt in den meisten Datensätzen gleich oft vor; sonst Tab (= eine Spalte)
+  function detectDelimiter(text) {
+    var best = "\t", top = 0;
+    text = str(text);
+    DELIMS.forEach(function (d) {
+      var recs = records(text, d, 60).filter(function (r) { return !r.every(blank); }).slice(0, 30);
+      var freq = {}, has = 0, mode = 0;
+      recs.forEach(function (r) {
+        var k = r.length - 1;
+        if (k < 1) return;
+        has++; freq[k] = (freq[k] || 0) + 1;
+        if (freq[k] > mode) mode = freq[k];
+      });
+      // nur wenn in mindestens der Hälfte der Datensätze vorhanden
+      var score = has && has * 2 >= recs.length ? has + mode : 0;
+      if (score > top) { top = score; best = d; }
+    });
+    return best;
+  }
+
+  function parseDelimited(text, delim) {
+    text = str(text);
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    return pad(records(text, delim || detectDelimiter(text)).filter(function (r) { return !r.every(blank); }));
+  }
+
+  /* ---------- HTML-Tabelle (manche Programme speichern so ".xls"-Exporte) ---------- */
+  var HENT = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", auml: "ä", ouml: "ö", uuml: "ü",
+    Auml: "Ä", Ouml: "Ö", Uuml: "Ü", szlig: "ß", eacute: "é", egrave: "è", agrave: "à", euro: "€" };
+  function isHtml(text) { return /^\s*</.test(text) && /<table\b/i.test(text); }
+  // Tag bis zum ">" (ein ">" in Attributwerten mit Anführungszeichen zählt nicht)
+  function tagRe(start, flags) { return new RegExp(start + "(?:\"[^\"]*\"|'[^']*'|[^'\">])*>", flags); }
+  var TR = tagRe("<tr\\b", "i"), TD = tagRe("<t[dh]\\b", "i"), BR = tagRe("<br\\b", "gi"), TAG = tagRe("<[a-zA-Z\\/!]", "g");
+  function htmlRows(text) {
+    var rows = [];
+    text = text.replace(/<!--[\s\S]*?-->|<(script|style)\b[\s\S]*?<\/\1\s*>/gi, "");
+    text.split(TR).slice(1).forEach(function (tr) {
+      var row = tr.split(/<\/tr\s*>|<\/table\s*>/i)[0].split(TD).slice(1).map(function (td) {
+        td = td.split(/<\/t[dh]\s*>/i)[0].replace(/\s+/g, " ").replace(BR, "\n").replace(/<\/(p|div|li)\s*>/gi, "\n").replace(TAG, "");
+        return ent(td, HENT).split("\n").map(function (l) { return l.trim(); }).join("\n").replace(/^\n+|\n+$/g, "");
+      });
+      if (!row.every(blank)) rows.push(row);
+    });
+    return pad(rows);
+  }
+
+  /* ---------- ZIP (für .xlsx) ---------- */
+  function isXlsx(bytes) { var u = bytesOf(bytes); return u[0] === 0x50 && u[1] === 0x4B && u[2] === 3 && u[3] === 4; }
+  function isXls(bytes) {
+    var u = bytesOf(bytes), sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1], i;
+    for (i = 0; i < 8; i++) if (u[i] !== sig[i]) return false;
+    return true;
+  }
+  // Passwortgeschütztes .xlsx steckt ebenfalls in einer alten OLE-Datei ("EncryptedPackage")
+  function encryptedOle(u) {
+    var w = "EncryptedPackage", i, j;
+    outer: for (i = 0; i + 2 * w.length <= u.length; i++) {
+      for (j = 0; j < w.length; j++) if (u[i + 2 * j] !== w.charCodeAt(j) || u[i + 2 * j + 1]) continue outer;
+      return true;
+    }
+    return false;
+  }
+  function xlsError(u) {
+    var enc = encryptedOle(u), e = fail("XLS", enc
+      ? "Die Excel-Datei ist mit einem Passwort geschützt. Bitte ohne Passwort als .xlsx oder CSV speichern."
+      : "Altes Excel-Format (.xls) wird nicht unterstützt. Bitte in Excel als .xlsx oder CSV speichern.");
+    if (enc) e.encrypted = true;
+    return e;
+  }
+
+  function inflate(raw) {
+    try {
+      return new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()
+        .then(function (b) { return new Uint8Array(b); }, function () { throw fail("ZIP", "Die Excel-Datei ist beschädigt (Entpacken fehlgeschlagen)."); });
+    } catch (e) {
+      return Promise.reject(fail("ZIP", "Dieser Browser kann die Excel-Datei nicht entpacken. Bitte als CSV speichern."));
+    }
+  }
+
+  // Inhaltsverzeichnis lesen: End Of Central Directory suchen, dann Central Directory durchgehen
+  function unzip(u) {
+    var dv = new DataView(u.buffer, u.byteOffset, u.byteLength), n = u.length, p = n - 22, stop = Math.max(0, n - 22 - 65535);
+    var files = {}, count, off, i, nl, name;
+    for (; p >= stop; p--) if (dv.getUint32(p, true) === 0x06054b50) break;
+    if (p < stop) throw fail("ZIP", "Die Excel-Datei ist beschädigt (ZIP-Verzeichnis fehlt).");
+    count = dv.getUint16(p + 10, true); off = dv.getUint32(p + 16, true);
+    if (count === 0xFFFF || off === 0xFFFFFFFF) throw fail("ZIP", "Zu grosse Excel-Datei (ZIP64) wird nicht unterstützt.");
+    for (i = 0; i < count; i++) {
+      if (off + 46 > n || dv.getUint32(off, true) !== 0x02014b50) throw fail("ZIP", "Die Excel-Datei ist beschädigt (ZIP-Verzeichnis).");
+      nl = dv.getUint16(off + 28, true);
+      name = utf8(u.subarray(off + 46, off + 46 + nl)).replace(/\\/g, "/").toLowerCase();
+      files[name] = { flags: dv.getUint16(off + 8, true), method: dv.getUint16(off + 10, true), size: dv.getUint32(off + 20, true),
+        usize: dv.getUint32(off + 24, true), at: dv.getUint32(off + 42, true) };
+      off += 46 + nl + dv.getUint16(off + 30, true) + dv.getUint16(off + 32, true);
+    }
+    function bytes(path) {   // Promise<Uint8Array|null>
+      var e = files[path.toLowerCase()], start;
+      if (!e) return Promise.resolve(null);
+      if (e.flags & 1) return Promise.reject(fail("ZIP", "Verschlüsselte Excel-Datei wird nicht unterstützt."));
+      if (e.size === 0xFFFFFFFF || e.usize === 0xFFFFFFFF || e.at === 0xFFFFFFFF) return Promise.reject(fail("ZIP", "Zu grosse Excel-Datei (ZIP64) wird nicht unterstützt."));
+      if (e.at + 30 > n || dv.getUint32(e.at, true) !== 0x04034b50) return Promise.reject(fail("ZIP", "Die Excel-Datei ist beschädigt."));
+      // Namens- und Zusatzfeldlänge aus dem LOKALEN Kopf (kann vom Verzeichnis abweichen)
+      start = e.at + 30 + dv.getUint16(e.at + 26, true) + dv.getUint16(e.at + 28, true);
+      if (start + e.size > n) return Promise.reject(fail("ZIP", "Die Excel-Datei ist beschädigt (abgeschnitten)."));
+      if (e.method === 0) return Promise.resolve(u.subarray(start, start + e.size));
+      if (e.method !== 8) return Promise.reject(fail("ZIP", "Komprimierungsart " + e.method + " wird nicht unterstützt."));
+      return inflate(u.subarray(start, start + e.size));
+    }
+    return {
+      names: Object.keys(files),
+      has: function (path) { return !!files[path.toLowerCase()]; },
+      text: function (path) { return bytes(path).then(function (b) { return b && decode(b); }); }
+    };
+  }
+
+  /* ---------- XML per Textsuche ---------- */
+  var XENT = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'" };
+  function codePoint(n) {
+    if (!(n > 0 && n <= 0x10FFFF)) return "\uFFFD";
+    if (n < 0x10000) return String.fromCharCode(n);
+    n -= 0x10000;
+    return String.fromCharCode(0xD800 + (n >> 10), 0xDC00 + (n & 1023));
+  }
+  function ent(s, names) {
+    return s.replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z]+));/g, function (m, h, d, nm) {
+      if (nm) return names[nm] != null ? names[nm] : m;
+      return codePoint(h ? parseInt(h, 16) : parseInt(d, 10));
+    });
+  }
+  // Zelltext: XML-Entities, dann OOXML-Escapes (_x000D_), Zeilenumbrüche vereinheitlichen
+  function xtext(s) {
+    return ent(s, XENT).replace(/_x([0-9a-fA-F]{4})_/g, function (m, h) { return String.fromCharCode(parseInt(h, 16)); })
+      .replace(/\r\n?/g, "\n");
+  }
+  function attrs(s) {
+    var o = {}, re = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g, m;
+    while ((m = re.exec(s))) o[m[1]] = ent(m[2] != null ? m[2] : m[3], XENT);
+    return o;
+  }
+  // Alle Elemente <name ...>...</name> oder <name .../> (mit beliebigem Namensraum-Präfix; ">" in Attributwerten erlaubt)
+  function each(xml, name, fn) {
+    var re = new RegExp("<(?:\\w+:)?" + name + "\\b((?:\"[^\"]*\"|'[^']*'|[^'\"\\/>])*)(?:\\/>|>([\\s\\S]*?)<\\/(?:\\w+:)?" + name + "\\s*>)", "g"), m;
+    while ((m = re.exec(xml))) fn(attrs(m[1]), m[2] || "");
+  }
+  // Text aus <t>-Elementen (auch Rich-Text-Läufe <r>), ohne Lautschrift <rPh>
+  function runs(xml) {
+    var s = "";
+    xml = xml.replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh\s*>/g, "").replace(/<(?:\w+:)?t\b[^>]*\/>/g, "");
+    each(xml, "t", function (a, inner) { s += inner; });
+    return xtext(s);
+  }
+  function colIndex(ref) {   // "B3" -> 1, "AA1" -> 26
+    var m = /^\$?([A-Za-z]{1,3})/.exec(ref || ""), n = 0, i, L;
+    if (!m) return -1;
+    L = m[1].toUpperCase();
+    for (i = 0; i < L.length; i++) n = n * 26 + L.charCodeAt(i) - 64;
+    return n - 1;
+  }
+  function cellValue(a, inner, sst) {
+    var t = a.t || "n", v;
+    if (t === "inlineStr" || /<(?:\w+:)?is\b/.test(inner)) return runs(inner);
+    v = /<(?:\w+:)?v\b[^>]*>([\s\S]*?)<\/(?:\w+:)?v\s*>/.exec(inner);
+    if (!v) return "";
+    v = xtext(v[1]);
+    if (t === "s") return str(sst[parseInt(v, 10)]);
+    if (t === "b") return v === "1" ? "TRUE" : v === "0" ? "FALSE" : v;
+    return v;
+  }
+  function sheetRows(xml, sst) {
+    var rows = [];
+    each(xml, "row", function (ra, inner) {
+      var row = [], col = -1, i;
+      each(inner, "c", function (a, content) {
+        var k = a.r ? colIndex(a.r) : -1;
+        col = k >= 0 ? k : col + 1;
+        if (col < 16384) row[col] = content ? cellValue(a, content, sst) : "";
+      });
+      for (i = 0; i < row.length; i++) if (row[i] == null) row[i] = "";
+      while (row.length && blank(row[row.length - 1])) row.pop();
+      if (row.length) rows.push(row);
+    });
+    return pad(rows);
+  }
+  function relPath(target) {   // Ziel einer Beziehung (relativ zu xl/ oder absolut) -> Pfad im ZIP
+    var out = [];
+    (target.charAt(0) === "/" ? target.slice(1) : "xl/" + target).split("/").forEach(function (p) {
+      if (p === "..") out.pop(); else if (p && p !== ".") out.push(p);
+    });
+    return out.join("/");
+  }
+
+  // Erstes Tabellenblatt (Reihenfolge in der Arbeitsmappe; ausgeblendete nur, wenn kein anderes da ist)
+  function readXlsx(bytes) {
+    var zip;
+    try { zip = unzip(bytesOf(bytes)); } catch (e) { return Promise.reject(e); }
+    return Promise.all([zip.text("xl/workbook.xml"), zip.text("xl/_rels/workbook.xml.rels")]).then(function (r) {
+      var rels = {}, sheets = [], ssPath = "xl/sharedStrings.xml", ok, pick, nums;
+      each(r[1] || "", "Relationship", function (a) {
+        if (!a.Id || !a.Target) return;
+        rels[a.Id] = relPath(a.Target);
+        if (/\/sharedStrings$/.test(a.Type || "")) ssPath = rels[a.Id];
+      });
+      each(r[0] || "", "sheet", function (a) {
+        var id = "";
+        Object.keys(a).forEach(function (k) { if (/:id$/.test(k)) id = a[k]; });
+        sheets.push({ name: a.name || "", path: rels[id], hidden: /hidden/i.test(a.state || "") });
+      });
+      ok = sheets.filter(function (s) { return s.path && zip.has(s.path); });
+      pick = ok.filter(function (s) { return !s.hidden; })[0] || ok[0];
+      if (!pick) {   // ohne verwertbare Arbeitsmappe: xl/worksheets/sheetN.xml mit kleinstem N
+        nums = zip.names.map(function (f) { var m = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(f); return m ? +m[1] : -1; })
+          .filter(function (k) { return k >= 0; }).sort(function (a, b) { return a - b; });
+        if (!nums.length) throw fail("ZIP", "In der Datei wurde keine Excel-Tabelle gefunden.");
+        pick = { name: "sheet" + nums[0], path: "xl/worksheets/sheet" + nums[0] + ".xml" };
+        if (!sheets.length) sheets = [pick];
+      }
+      return Promise.all([zip.text(ssPath), zip.text(pick.path)]).then(function (x) {
+        var sst = [];
+        if (x[0]) each(x[0], "si", function (a, inner) { sst.push(runs(inner)); });
+        return { rows: sheetRows(x[1] || "", sst), sheet: pick.name, sheets: sheets.map(function (s) { return s.name; }) };
+      });
+    });
+  }
+
+  // Datei lesen: .xlsx, Text (CSV/TSV) oder HTML-Tabelle; altes .xls -> Fehler "XLS"
+  function read(bytes, fileName) {
+    return new Promise(function (ok) {
+      var u = bytesOf(bytes), text, d;
+      if (isXls(u)) throw xlsError(u);
+      if (isXlsx(u)) {
+        ok(readXlsx(u).then(function (x) { return { rows: x.rows, format: "xlsx", sheet: x.sheet, sheets: x.sheets }; }));
+        return;
+      }
+      text = decode(u);
+      if (isHtml(text)) { ok({ rows: htmlRows(text), format: "html" }); return; }
+      d = detectDelimiter(text);
+      ok({ rows: parseDelimited(text, d), format: "text", delimiter: d });
+    });
+  }
+
+  /* ---------- Spalten erkennen, Fälle bilden ---------- */
+  // gleich wie Engine.norm
+  function norm(s) {
+    return String(s).toLowerCase()
+      .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  // Zellwert -> Code: 1. Zahl mit 3–5 Ziffern, 2. genaue Bezeichnung, 3. längste enthaltene Bezeichnung (eindeutig)
+  function codeResolver(classes) {
+    var known = Object.create(null), exact = Object.create(null), labels = [], memo = Object.create(null);
+    (classes || []).forEach(function (c) {
+      var code = str(c.code);
+      known[code] = 1;
+      [c.label, c.alt].forEach(function (l) {
+        var n = l ? norm(l) : "";
+        if (!n) return;
+        exact[n] = exact[n] && exact[n] !== code ? "?" : code;   // "?" = mehrdeutig
+        if (n.length >= 8) labels.push({ n: " " + n + " ", len: n.length, code: code });
+      });
+    });
+    labels.sort(function (a, b) { return b.len - a.len; });
+    function find(s) {
+      var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, hit = null;
+      s = s.trim();
+      while ((m = re.exec(s))) if (known[m[2]]) return m[2];
+      v = norm(s);
+      if (!v) return null;
+      if (exact[v] && exact[v] !== "?") return exact[v];
+      v = " " + v + " ";
+      for (i = 0; i < labels.length && (!hit || labels[i].len === hit.len); i++) {
+        if (v.indexOf(labels[i].n) < 0) continue;
+        if (hit && hit.code !== labels[i].code) return null;
+        hit = labels[i];
+      }
+      return hit ? hit.code : null;
+    }
+    return function (value) {
+      if (value == null) return null;
+      var k = String(value);
+      return k in memo ? memo[k] : (memo[k] = find(k));
+    };
+  }
+
+  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent)/i;
+  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text)/i;
+  var NUMERIC = /^[\d\s.,:\/+-]+$/;
+
+  // Kopfzeile? Welche Spalte enthält den Code, welche den Text?
+  function guess(rows, resolve) {
+    rows = rows || [];
+    var n = rows.length, w = 0, sample = [], stats = [], codeCol = -1, best = 0, header, main = -1, cand = [], i, j, v, s;
+    rows.forEach(function (r) { if (r.length > w) w = r.length; });
+    for (i = 1; i <= Math.min(n - 1, 300); i++) sample.push(rows[i]);
+    if (n === 1) sample.push(rows[0]);
+    for (j = 0; j < w; j++) {
+      s = { ne: 0, ok: 0, len: 0, num: 0 };
+      for (i = 0; i < sample.length; i++) {
+        v = cell(sample[i], j).trim();
+        if (!v) continue;
+        s.ne++; s.len += v.length;
+        if (resolve(v)) s.ok++;
+        if (NUMERIC.test(v)) s.num++;
+      }
+      s.frac = s.ne ? s.ok / s.ne : 0; s.avg = s.ne ? s.len / s.ne : 0;
+      stats.push(s);
+      if (s.frac >= 0.3 && s.frac > best) { best = s.frac; codeCol = j; }
+    }
+    if (codeCol >= 0) {
+      v = cell(rows[0], codeCol).trim();
+      header = !!v && !NUMERIC.test(v) && !resolve(v);
+    } else {
+      header = n > 1 && w > 0;
+      for (j = 0; j < w; j++) {
+        v = cell(rows[0], j).trim();
+        if (!v || v.length > 40 || NUMERIC.test(v)) header = false;
+      }
+    }
+    // Spaltentitel (nur kurze Zellen der Kopfzeile zählen als Titel)
+    function title(k) { var t = header ? cell(rows[0], k).trim() : ""; return t.length <= 40 ? t : ""; }
+    for (j = 0; j < w; j++) {
+      if (j === codeCol || SKIP.test(title(j)) || stats[j].num > stats[j].ne * 0.5) continue;
+      cand.push(j);
+      if (stats[j].avg >= 8 && (main < 0 || stats[j].avg > stats[main].avg)) main = j;
+    }
+    return {
+      header: header, codeCol: codeCol,
+      textCols: main < 0 ? [] : cand.filter(function (k) {
+        return k === main || (header && EXTRA.test(title(k)) && stats[k].avg >= 5);
+      })
+    };
+  }
+
+  // Zeilen -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code oder ohne Text
+  function toCases(rows, cfg, resolve) {
+    var out = { cases: [], total: 0, noCode: 0, noText: 0, unknown: [] }, unk = Object.create(null), order = [];
+    var cols = cfg.textCols || [], codeCol = cfg.codeCol == null ? -1 : cfg.codeCol, i, j, v, c, t;
+    rows = rows || [];
+    for (i = cfg.header ? 1 : 0; i < rows.length; i++) {
+      out.total++;
+      v = codeCol >= 0 ? cell(rows[i], codeCol).trim() : "";
+      c = v ? resolve(v) : null;
+      if (!c) {
+        out.noCode++;
+        if (v) { if (!(v in unk)) { unk[v] = 0; order.push(v); } unk[v]++; }
+        continue;
+      }
+      t = [];
+      for (j = 0; j < cols.length; j++) { v = cell(rows[i], cols[j]).trim(); if (v) t.push(v); }
+      if (!t.length) { out.noText++; continue; }
+      out.cases.push({ t: t.join("\n"), c: c, row: i });
+    }
+    out.unknown = order.map(function (k, idx) { return [k, unk[k], idx]; })
+      .sort(function (a, b) { return b[1] - a[1] || a[2] - b[2]; })
+      .slice(0, 10).map(function (x) { return [x[0], x[1]]; });
+    return out;
+  }
+
+  return {
+    decode: decode, detectDelimiter: detectDelimiter, parseDelimited: parseDelimited,
+    isXlsx: isXlsx, isXls: isXls, readXlsx: readXlsx, read: read,
+    norm: norm, codeResolver: codeResolver, guess: guess, toCases: toCases
   };
 })();
 
@@ -1324,6 +2141,8 @@ var Engine = (function () {
   }
   function full(c) { return c.code + " - " + c.label; }
   function snippet(t, n) { t = String(t).replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; }
+  function fmt(n) { return Number(n).toLocaleString("de-CH"); }
+  function pct(a, n) { return n ? Math.round(100 * a / n) + " %" : "–"; }
 
   // ---------- Gelernte Fälle ----------
   var KEY = "fall-klassifizierung.gelernt.v1", storageOk = true;
@@ -1356,9 +2175,12 @@ var Engine = (function () {
   }
 
   function updateLearnedUI() {
-    $("badge").textContent = CLASSES.length + " Klassifizierungen · " + learned.length + (learned.length === 1 ? " gelernter Fall" : " gelernte Fälle");
-    $("learnedCount").textContent = "(" + learned.length + ")";
+    $("badge").textContent = CLASSES.length + " Klassifizierungen · " + fmt(learned.length) + (learned.length === 1 ? " gelernter Fall" : " gelernte Fälle");
+    $("learnedCount").textContent = "(" + fmt(learned.length) + ")";
     $("storageWarn").hidden = storageOk;
+    var nImp = learned.filter(function (e) { return e.s === "import"; }).length;
+    $("btnClearImported").hidden = !nImp;
+    $("btnClearImported").textContent = "Importierte löschen (" + fmt(nImp) + ")";
     var items = learned.slice().reverse().slice(0, 40);
     $("learnedList").innerHTML = items.length ? items.map(function (e) {
       var c = BY[e.c];
@@ -1566,12 +2388,16 @@ var Engine = (function () {
       try {
         var data = JSON.parse(rd.result);
         var arr = Array.isArray(data) ? data : (data.beispiele || data.examples || []);
-        var n = 0;
+        var n = 0, seen = {};
+        learned.forEach(function (y) { seen[y.c + "\u0001" + y.t] = 1; });
         arr.forEach(function (x) {
           if (!x || !x.t || !BY[x.c]) return;
           var t = String(x.t).slice(0, 1500);
-          if (learned.some(function (y) { return y.t === t && y.c === x.c; })) return;
-          learned.push({ t: t, c: String(x.c), d: x.d || "" }); n++;
+          if (seen[x.c + "\u0001" + t]) return;
+          seen[x.c + "\u0001" + t] = 1;
+          var it = { t: t, c: String(x.c), d: x.d || "" };
+          if (x.s === "import") it.s = "import";
+          learned.push(it); n++;
         });
         saveLearned(); reindex(); render();
         toast(n + (n === 1 ? " Fall importiert" : " Fälle importiert"));
@@ -1582,8 +2408,310 @@ var Engine = (function () {
   });
   $("btnClear").addEventListener("click", function () {
     if (!learned.length) return;
-    if (!window.confirm("Alle " + learned.length + " gelernten Fälle löschen? Tipp: vorher exportieren.")) return;
+    if (!window.confirm("Alle " + fmt(learned.length) + " gelernten Fälle löschen? Tipp: vorher exportieren.")) return;
     learned = []; saveLearned(); reindex(); render();
+  });
+  $("btnClearImported").addEventListener("click", function () {
+    var n = learned.filter(function (e) { return e.s === "import"; }).length;
+    if (!n || !window.confirm(fmt(n) + " importierte Fälle löschen? Von Hand gelernte Fälle bleiben.")) return;
+    learned = learned.filter(function (e) { return e.s !== "import"; }); saveLearned(); reindex(); render();
+  });
+  function download(name, text) {
+    var blob = new Blob([text], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  // ---------- Fälle importieren und testen ----------
+  var resolveCode = Table.codeResolver(CLASSES);
+  var imp = { rows: null, cfg: null, res: null, format: "", ctl: null, result: null, cases: null, errN: 25, codesAll: false };
+  var DELIM = { "\t": "Tabulator", ";": "Semikolon", ",": "Komma", "|": "senkrechter Strich" };
+
+  function impError(msg) { $("impErr").textContent = msg || ""; $("impErr").hidden = !msg; }
+  function colName(i) { var s = ""; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; }
+  function codeHtml(code) { var c = BY[code]; return "<code>" + esc(code) + "</code> " + esc(c ? c.label : ""); }
+
+  function loadTable(rows, info) {
+    impError("");
+    cancelEval();
+    if (!rows || !rows.length) { impError("Keine Zeilen gefunden."); return false; }
+    if (rows[0].length < 2) { impError("Nur eine Spalte gefunden – es braucht eine Spalte mit dem Text und eine mit der Klassifizierung."); return false; }
+    imp.rows = rows;
+    imp.cfg = Table.guess(rows, resolveCode);
+    $("impMap").hidden = false;
+    $("impFileInfo").textContent = info + " · " + fmt(rows.length) + " Zeilen, " + rows[0].length + " Spalten";
+    $("impHeader").checked = imp.cfg.header;
+    renderMap(); updateCases();
+    return true;
+  }
+
+  function colClass(i) { return imp.cfg.codeCol === i ? "col-code" : imp.cfg.textCols.indexOf(i) !== -1 ? "col-text" : ""; }
+  function renderMap() {
+    var rows = imp.rows, cfg = imp.cfg, n = rows[0].length, i, html = "<thead><tr>";
+    for (i = 0; i < n; i++) {
+      var role = cfg.codeCol === i ? "code" : cfg.textCols.indexOf(i) !== -1 ? "text" : "";
+      html += '<th class="' + colClass(i) + '">' + colName(i) + (cfg.header && String(rows[0][i]).trim() ? ": " + esc(snippet(rows[0][i], 30)) : "") +
+        '<select data-col="' + i + '" aria-label="Spalte ' + colName(i) + '">' +
+        '<option value=""' + (role ? "" : " selected") + '>– nicht verwenden</option>' +
+        '<option value="text"' + (role === "text" ? " selected" : "") + ">Text</option>" +
+        '<option value="code"' + (role === "code" ? " selected" : "") + ">Klassifizierung</option></select></th>";
+    }
+    html += "</tr></thead><tbody>";
+    var start = cfg.header ? 1 : 0;
+    rows.slice(start, start + 5).forEach(function (r) {
+      html += "<tr>" + r.map(function (cell, j) { return '<td class="' + colClass(j) + '">' + esc(snippet(cell, 140)) + "</td>"; }).join("") + "</tr>";
+    });
+    $("impPreview").innerHTML = html + "</tbody>";
+  }
+  $("impPreview").addEventListener("change", function (e) {
+    var sel = e.target.closest("select[data-col]");
+    if (!sel) return;
+    var col = parseInt(sel.getAttribute("data-col"), 10), cfg = imp.cfg;
+    cfg.textCols = cfg.textCols.filter(function (c) { return c !== col; });
+    if (cfg.codeCol === col) cfg.codeCol = -1;
+    if (sel.value === "text") cfg.textCols = cfg.textCols.concat([col]).sort(function (a, b) { return a - b; });
+    if (sel.value === "code") { cfg.textCols = cfg.textCols.filter(function (c) { return c !== col; }); cfg.codeCol = col; }
+    renderMap(); updateCases();
+  });
+  $("impHeader").addEventListener("change", function () { imp.cfg.header = this.checked; renderMap(); updateCases(); });
+
+  function updateCases() {
+    cancelEval();
+    imp.result = null; $("evalOut").innerHTML = "";
+    var r = imp.res = Table.toCases(imp.rows, imp.cfg, resolveCode);
+    var codes = {};
+    r.cases.forEach(function (x) { codes[x.c] = 1; });
+    var html = "<b>" + fmt(r.cases.length) + (r.cases.length === 1 ? " Fall" : " Fälle") + "</b> mit Text und gültiger Klassifizierung";
+    if (r.cases.length) html += " (" + fmt(Object.keys(codes).length) + " verschiedene Klassifizierungen)";
+    html += " · von " + fmt(r.total) + " Zeilen";
+    if (r.noCode) html += " · " + fmt(r.noCode) + " ohne gültige Klassifizierung";
+    if (r.noText) html += " · " + fmt(r.noText) + " ohne Text";
+    if (imp.cfg.codeCol < 0) html += "<br>Bitte eine Spalte als <b>Klassifizierung</b> wählen.";
+    if (!imp.cfg.textCols.length) html += "<br>Bitte mindestens eine Spalte als <b>Text</b> wählen.";
+    if (r.unknown.length) html += "<br>Nicht erkannte Klassifizierungen: " + r.unknown.slice(0, 6).map(function (u) {
+      return "„" + esc(snippet(u[0], 40)) + "“ (" + fmt(u[1]) + "×)";
+    }).join(", ");
+    $("impSum").innerHTML = html;
+    $("btnEval").disabled = $("btnLearnAll").disabled = !r.cases.length;
+  }
+
+  function readBytes(f) {
+    if (f.arrayBuffer) return f.arrayBuffer().then(function (b) { return new Uint8Array(b); });
+    return new Promise(function (ok, fail) {
+      var rd = new FileReader();
+      rd.onload = function () { ok(new Uint8Array(rd.result)); };
+      rd.onerror = function () { fail(rd.error); };
+      rd.readAsArrayBuffer(f);
+    });
+  }
+  function readError(err) {
+    if (err && err.encrypted) return "Diese Excel-Datei ist mit einem Passwort geschützt. Bitte in Excel ohne Passwort als .xlsx oder CSV speichern.";
+    if (err && err.code === "XLS") return "Alte Excel-Datei (.xls): bitte in Excel mit „Speichern unter“ als .xlsx oder CSV speichern.";
+    if (err && err.code === "ZIP") return "Diese Excel-Datei kann nicht gelesen werden (evtl. mit Passwort geschützt). Bitte als CSV speichern.";
+    if (typeof DecompressionStream === "undefined") return "Dieser Browser kann .xlsx-Dateien nicht lesen. Bitte in Excel als CSV speichern oder die Zeilen kopieren und einfügen.";
+    return "Die Datei konnte nicht gelesen werden.";
+  }
+  $("btnImpFile").addEventListener("click", function () { $("impFile").click(); });
+  $("impFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    impError("");
+    readBytes(f).then(function (bytes) { return Table.read(bytes, f.name); }).then(function (res) {
+      imp.format = res.format;
+      var info = f.name + (res.format === "xlsx"
+        ? " (Excel" + (res.sheets && res.sheets.length > 1 ? ", nur das erste Blatt „" + res.sheet + "“" : "") + ")"
+        : res.format === "html" ? " (Tabelle aus einer Webseite)"
+        : " (Text, getrennt mit " + (DELIM[res.delimiter] || "?") + ")");
+      loadTable(res.rows, info);
+    }).catch(function (err) { impError(readError(err)); if (window.console) console.warn(err); });
+  });
+  $("btnImpPaste").addEventListener("click", function () {
+    var box = $("impPasteBox");
+    box.hidden = !box.hidden;
+    if (!box.hidden) $("impPaste").focus();
+  });
+  $("btnImpPasteOk").addEventListener("click", function () {
+    var t = $("impPaste").value;
+    if (!t.trim()) { impError("Zuerst Zeilen aus Excel einfügen."); return; }
+    imp.format = "eingefügt";
+    if (loadTable(Table.parseDelimited(t), "Eingefügte Zeilen")) { $("impPaste").value = ""; $("impPasteBox").hidden = true; }
+  });
+
+  // --- Genauigkeit testen (läuft in kleinen Schritten, damit die Seite bedienbar bleibt)
+  var PHASE = { prepare: [0, 0.15, "Fälle vorbereiten"], test: [0.15, 0.8, "Fälle testen"], words: [0.95, 0.05, "Wörter zählen"], done: [1, 0, "Fertig"] };
+  function cancelEval() {
+    imp.ctl = null;
+    $("impProg").hidden = true;
+    if (imp.res) $("btnEval").disabled = !imp.res.cases.length;
+  }
+  $("btnEvalStop").addEventListener("click", cancelEval);
+  $("btnEval").addEventListener("click", function () {
+    if (!imp.res || !imp.res.cases.length) return;
+    imp.cases = imp.res.cases;
+    imp.result = null; imp.errN = 25; imp.codesAll = false;
+    var ctl = imp.ctl = Engine.evaluation(imp.cases.map(function (x) { return { t: x.t, c: x.c }; }), { maxTests: 3000, minDocs: 5 });
+    $("evalOut").innerHTML = ""; $("impProg").hidden = false; $("btnEval").disabled = true;
+    (function tick() {
+      if (imp.ctl !== ctl) return;
+      var done;
+      try { done = ctl.step(document.hidden ? 400 : 40); }
+      catch (err) { cancelEval(); impError("Beim Testen ist ein Fehler aufgetreten: " + err.message); return; }
+      var p = ctl.progress(), ph = PHASE[p.phase] || PHASE.done;
+      $("impProgBar").value = ph[0] + ph[1] * (p.total ? p.done / p.total : 1);
+      $("impProgTxt").textContent = ph[2] + (p.total ? " " + fmt(p.done) + " / " + fmt(p.total) : "");
+      if (!done) { setTimeout(tick, 0); return; }
+      imp.result = ctl.result();
+      cancelEval();
+      renderEval();
+    })();
+  });
+
+  function codesHtml(list, exp) {
+    if (!list.length) return '<span class="bad">kein Vorschlag</span>';
+    return list.map(function (c) { return c === exp ? '<span class="ok">' + esc(c) + " ✓</span>" : esc(c); }).join(", ");
+  }
+  function renderEval() {
+    var r = imp.result, V = {}, html = "";
+    if (!r) return;
+    r.variants.forEach(function (v) { V[v.id] = v; });
+    var sk = [];
+    if (r.skipped.zuWenigText) sk.push(fmt(r.skipped.zuWenigText) + " mit zu wenig Text");
+    if (r.skipped.unbekannterCode) sk.push(fmt(r.skipped.unbekannterCode) + " mit unbekanntem Code");
+    html += "<h3>Ergebnis</h3><p class=\"note\">Getestet: <b>" + fmt(r.tested) + (r.tested === 1 ? " Fall" : " Fälle") + "</b>" +
+      (r.sampleEvery > 1 ? " (jeder " + r.sampleEvery + ". von " + fmt(r.usable) + " Fällen, damit es schneller geht)" : "") +
+      (sk.length ? " · nicht getestet: " + sk.join(", ") : "") + "</p>";
+    function row(v, main) {
+      return "<tr" + (main ? ' class="main"' : "") + "><td>" + esc(v.name) + '</td><td class="num">' + pct(v.top1, v.n) +
+        '</td><td class="num">' + pct(v.top3, v.n) + '</td><td class="num">' + pct(v.none, v.n) + "</td></tr>";
+    }
+    var head = '<thead><tr><th>Methode</th><th class="num">Richtig auf Platz 1</th><th class="num">Richtig unter den 3 Vorschlägen</th><th class="num">Kein Vorschlag</th></tr></thead>';
+    html += '<div class="scroll"><table class="tbl">' + head + "<tbody>" + (V.regeln ? row(V.regeln, true) : "") + (V.gelernt ? row(V.gelernt, true) : "") + "</tbody></table></div>";
+    html += '<p class="note">„Nur Stichwörter“ = so gut ist das Tool heute ohne gelernte Fälle. „Mit importierten Fällen“ = so gut wäre es, wenn alle diese Fälle gelernt sind. ' +
+      "Dafür wird jeder Fall wie ein neuer Fall getestet: er selbst und Fälle mit genau gleichem Text zählen dabei nicht. Deine bisher gelernten Fälle werden beim Test nicht verwendet.</p>";
+    var others = r.variants.filter(function (v) { return v.id !== "regeln" && v.id !== "gelernt"; });
+    if (others.length) html += "<details><summary>Weitere Varianten (zur Feinabstimmung)</summary><div class=\"scroll\"><table class=\"tbl\">" + head + "<tbody>" +
+      others.map(function (v) { return row(v, false); }).join("") + "</tbody></table></div></details>";
+
+    // Pro Klassifizierung
+    var pc = imp.codesAll ? r.perCode : r.perCode.slice(0, 40);
+    html += "<details" + (imp.codesAll ? " open" : "") + "><summary>Pro Klassifizierung (" + fmt(r.perCode.length) + ")</summary><div class=\"scroll\"><table class=\"tbl\"><thead><tr>" +
+      '<th>Klassifizierung</th><th class="num">Fälle</th><th class="num">Stichwörter<br>Platz 1 / Top 3</th><th class="num">Mit Fällen<br>Platz 1 / Top 3</th><th>Oft stattdessen auf Platz 1</th></tr></thead><tbody>' +
+      pc.map(function (p) {
+        return "<tr><td>" + codeHtml(p.code) + '</td><td class="num">' + fmt(p.n) + '</td><td class="num">' + pct(p.regeln.top1, p.n) + " / " + pct(p.regeln.top3, p.n) +
+          '</td><td class="num">' + pct(p.gelernt.top1, p.n) + " / " + pct(p.gelernt.top3, p.n) + "</td><td>" +
+          (p.wrong || []).map(function (w) { return "<code>" + esc(w[0]) + "</code> (" + fmt(w[1]) + "×)"; }).join(", ") + "</td></tr>";
+      }).join("") + "</tbody></table></div>" +
+      (!imp.codesAll && r.perCode.length > 40 ? '<button class="btn" type="button" data-ev="codes">Alle ' + fmt(r.perCode.length) + " anzeigen</button>" : "") + "</details>";
+
+    // Verwechslungen
+    function confTable(list) {
+      if (!list || !list.length) return '<p class="note">Keine.</p>';
+      return '<div class="scroll"><table class="tbl"><thead><tr><th>Richtig wäre</th><th>Vorgeschlagen auf Platz 1</th><th class="num">Anzahl</th></tr></thead><tbody>' +
+        list.slice(0, 20).map(function (x) {
+          return "<tr><td>" + codeHtml(x.exp) + "</td><td>" + (x.got === "-" ? '<span class="bad">kein Vorschlag</span>' : codeHtml(x.got)) + '</td><td class="num">' + fmt(x.n) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    html += "<details><summary>Häufigste Verwechslungen</summary><p class=\"note\"><b>Nur Stichwörter:</b></p>" + confTable(r.confusions.regeln) +
+      "<p class=\"note\"><b>Mit importierten Fällen:</b></p>" + confTable(r.confusions.gelernt) + "</details>";
+
+    // Fehlgriffe (nur lokal sichtbar)
+    var errs = r.errors || [];
+    html += "<details" + (imp.errN > 25 ? " open" : "") + "><summary>Fehlgriffe ansehen (" + fmt(errs.length) + ") – nur hier sichtbar, nicht im Bericht</summary>" +
+      '<p class="note">Fälle, bei denen die richtige Klassifizierung nicht unter den 3 Vorschlägen war (mit Stichwörtern oder mit Fällen). „Im Feld öffnen“ zeigt den Fall oben im Eingabefeld.</p>' +
+      errs.slice(0, imp.errN).map(function (x) {
+        var cs = imp.cases[x.i];
+        return '<div class="errcase"><b>Fall ' + fmt(x.i + 1) + "</b> · richtig wäre " + codeHtml(x.c) +
+          '<button class="btn" type="button" data-ev="open" data-i="' + x.i + '">Im Feld öffnen</button>' +
+          "<br>Stichwörter: " + codesHtml(x.regeln, x.c) + " · Mit Fällen: " + codesHtml(x.gelernt, x.c) +
+          '<div class="et">' + esc(snippet(cs ? Engine.prepare(cs.t).cleaned : "", 300)) + "</div></div>";
+      }).join("") +
+      (errs.length > imp.errN ? '<button class="btn" type="button" data-ev="moreErr">25 weitere anzeigen</button>' : "") + "</details>";
+
+    // Wörter
+    var W = r.words || [];
+    html += "<details><summary>Häufige Wörter je Klassifizierung (" + fmt(W.length) + ") – kommen in den Bericht</summary>" +
+      '<p class="note">Wörter, die in mindestens 5 Fällen einer Klassifizierung vorkommen. <b>Fett</b> = noch nicht in den Stichwörtern dieser Klassifizierung.</p>' +
+      (W.length ? W.map(function (x) {
+        return '<p class="words">' + codeHtml(x.code) + " (" + fmt(x.n) + " Fälle): " + x.words.map(function (w) {
+          return '<span class="' + (w[2] ? "known" : "new") + '">' + esc(w[0]) + "</span> (" + fmt(w[1]) + ")";
+        }).join(", ") + "</p>";
+      }).join("") : '<p class="note">Zu wenige Fälle je Klassifizierung.</p>') + "</details>";
+
+    // Bericht
+    var rep = JSON.stringify(buildReport(r), null, 1);
+    html += '<h3>Bericht</h3><p class="note">Der Bericht enthält nur Zahlen, Codes, Stichwort-Regeln und Wörter, die in mindestens 5 Fällen vorkommen – <b>keine Kundentexte</b>. ' +
+      "Er kann weitergegeben werden, damit die Stichwörter gezielt verbessert werden. Bitte vorher kurz durchsehen.</p>" +
+      '<div class="btnrow"><button class="btn primary" type="button" data-ev="report">Bericht exportieren (ohne Kundentexte)</button></div>' +
+      '<details><summary>Bericht ansehen</summary><pre class="report">' + esc(rep) + "</pre></details>";
+    $("evalOut").innerHTML = html;
+  }
+
+  function buildReport(r) {
+    var res = imp.res || { total: 0, cases: [], noCode: 0, noText: 0, unknown: [] };
+    return {
+      app: "Fall-Klassifizierung", typ: "Auswertung", version: 1, erstellt: new Date().toISOString().slice(0, 10),
+      hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes, Stichwort-Regeln und Wörter aus mindestens 5 Fällen.",
+      quelle: { format: imp.format, zeilen: res.total, faelle: res.cases.length, ohneCode: res.noCode, ohneText: res.noText,
+        nichtErkannteCodes: res.unknown.map(function (u) { return [snippet(u[0], 40), u[1]]; }) },
+      test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped },
+      methoden: r.variants.map(function (v) {
+        return { id: v.id, name: v.name, n: v.n, top1: v.top1, top3: v.top3, keinVorschlag: v.none, top1Prozent: pct(v.top1, v.n), top3Prozent: pct(v.top3, v.n) };
+      }),
+      proCode: r.perCode,
+      verwechslungen: r.confusions,
+      ausloeser: r.triggers,
+      woerter: r.words
+    };
+  }
+
+  $("evalOut").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-ev]");
+    if (!b) return;
+    var what = b.getAttribute("data-ev");
+    if (what === "codes") { imp.codesAll = true; renderEval(); }
+    else if (what === "moreErr") { imp.errN += 25; renderEval(); }
+    else if (what === "open") {
+      var cs = imp.cases && imp.cases[parseInt(b.getAttribute("data-i"), 10)];
+      if (!cs) return;
+      q.value = cs.t; render(); window.scrollTo(0, 0); q.focus();
+    } else if (what === "report" && imp.result) {
+      download("fall-klassifizierung-auswertung-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(buildReport(imp.result), null, 1));
+    }
+  });
+
+  // --- Alle als gelernte Fälle übernehmen
+  function trySave(arr) {
+    try { window.localStorage.setItem(KEY, JSON.stringify(arr)); return true; } catch (e) { return false; }
+  }
+  $("btnLearnAll").addEventListener("click", function () {
+    if (!imp.res || !imp.res.cases.length) return;
+    var seen = {}, add = [], today = new Date().toISOString().slice(0, 10);
+    learned.forEach(function (e) { seen[e.c + "\u0001" + e.t] = 1; });
+    imp.res.cases.forEach(function (x) {
+      var t = Engine.learnable(x.t);
+      if (!t) return;
+      t = t.slice(0, 800);
+      var k = x.c + "\u0001" + t;
+      if (seen[k]) return;
+      seen[k] = 1; add.push({ t: t, c: x.c, d: today, s: "import" });
+    });
+    if (!add.length) { toast("Keine neuen Fälle zum Übernehmen"); return; }
+    if (!window.confirm(fmt(add.length) + " Fälle als gelernte Fälle übernehmen?\nSie werden nur in diesem Browser gespeichert und können unter „Gelernte Fälle“ wieder gelöscht werden.")) return;
+    var base = learned.slice(), n = add.length;
+    storageOk = trySave(base);                                      // false: Speichern gar nicht möglich, nur bis zum Schliessen
+    if (storageOk && !trySave(base.concat(add))) {                  // Speicher voll: so viele wie möglich
+      var lo = 0, hi = add.length - 1;
+      while (lo < hi) { var mid = Math.ceil((lo + hi) / 2); if (trySave(base.concat(add.slice(0, mid)))) lo = mid; else hi = mid - 1; }
+      n = lo; trySave(base.concat(add.slice(0, n)));
+    }
+    learned = base.concat(add.slice(0, n));
+    reindex(); render();
+    if (!storageOk) toast(fmt(n) + " Fälle übernommen – aber nur bis zum Schliessen (Browser speichert nicht)");
+    else if (n < add.length) toast("Browserspeicher voll: nur " + fmt(n) + " von " + fmt(add.length) + " Fällen übernommen");
+    else toast(fmt(n) + " Fälle übernommen");
   });
 
   reindex();
