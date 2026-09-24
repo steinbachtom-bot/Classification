@@ -1,7 +1,8 @@
 // Tests für den Motor (src/engine.js): node tests/unit-engine.js
-//   --snapshot alt.json      Verhalten mit einem früheren Stand vergleichen (auch ENGINE_SNAPSHOT=alt.json)
+//   --snapshot alt.json      (optional) Verhalten mit einem früheren Stand vergleichen und Unterschiede je Text
+//                            auflisten (auch ENGINE_SNAPSHOT=alt.json); ohne diese Angabe wird nichts verglichen
 //   --snapshot-neu neu.json  aktuellen Stand als Snapshot speichern (vor einem Umbau)
-// Alle Testtexte sind erfunden.
+// Alle Testtexte, Namen und Nummern sind erfunden.
 const fs = require('fs'), vm = require('vm'), path = require('path'), assert = require('assert');
 const ROOT = path.join(__dirname, '..');
 const ctx = {}; vm.createContext(ctx);
@@ -9,6 +10,13 @@ vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/data.js'), 'utf8') +
   ';this.S=SYN;this.K=KLASSEN;this.A=ALT_LABELS;this.ABK=ABK;this.B=BEISPIELE;', ctx);
 const E = require(path.join(ROOT, 'src/engine.js'));
 E.build(ctx.S, ctx.K, ctx.A, ctx.ABK, ctx.B);
+// eigene Instanz des Motors (z.B. mit anderen eingebauten Beispielen)
+function engineWith(base) {
+  const m = { exports: {} };
+  new Function('module', 'exports', fs.readFileSync(path.join(ROOT, 'src/engine.js'), 'utf8'))(m, m.exports);
+  m.exports.build(ctx.S, ctx.K, ctx.A, ctx.ABK, base);
+  return m.exports;
+}
 const rd = f => JSON.parse(fs.readFileSync(path.join(__dirname, f), 'utf8'));
 const args = process.argv.slice(2), arg = n => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
 
@@ -18,11 +26,13 @@ function test(name, fn) {
 }
 const codes = r => r.map(x => x.c.code);
 const first = v => Array.isArray(v) ? first(v[0]) : v;
+const hasWord = s => /[\p{L}\p{N}]/u.test(s);
 // deterministischer Zufall
 let seed = 12345;
 const rng = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
 const pick = a => a[Math.floor(rng() * a.length)];
 function run(ctl, ms) { let n = 0; while (!ctl.step(ms)) n++; return n; }
+function evalAll(eng, cases, opts) { const c = eng.evaluation(cases, Object.assign({ details: true }, opts || {})); c.step(); return c.result(); }
 
 // erfundene Testsätze -> {t, c} (erster erwarteter Code)
 const SETS = ['cases.json', 'holdout.json', 'realistic_mails.json', 'realistic_notes.json', 'oldcases.json', 'multi.json'];
@@ -38,10 +48,10 @@ const LEARNED = [
   ['FB Hochzeit: Kunde will Buch mit anderem Cover nachbestellen', '50405'],
   ['Kunde fragt nach Rabattcode für Studenten', '50610'],
   ['Kunde will Rechnung auf Firma statt Privat', '50103'],
-].map(([t, c]) => ({ t: E.learnable(t) || t, c }));
+].map(([t, c]) => ({ t: E.learnText(t) || t, c }));
 
 // ------------------------------------------------------------------
-// a) Verhalten unverändert (Snapshot)
+// a) Vergleich mit einem früheren Stand (Snapshot, optional)
 // ------------------------------------------------------------------
 function snapshot(texts, learned) {
   const snap = opts => texts.map(q => E.classify(q, opts).map(r => ({ c: r.c.code, s: +r.score.toFixed(9), rel: +r.rel.toFixed(9), byCode: r.byCode,
@@ -64,38 +74,149 @@ if (writeSnap) {
   console.log('Snapshot gespeichert:', writeSnap);
 }
 const snapFile = arg('--snapshot') || process.env.ENGINE_SNAPSHOT;
-if (!snapFile || !fs.existsSync(snapFile)) {
-  console.log(`Hinweis: Snapshot-Vergleich übersprungen (${snapFile ? 'Datei fehlt: ' + snapFile : 'kein --snapshot / ENGINE_SNAPSHOT angegeben'})`);
+if (!snapFile) {
+  console.log('Hinweis: kein Snapshot-Vergleich (optional: --snapshot alt.json)');
 } else {
-  const A = JSON.parse(fs.readFileSync(snapFile, 'utf8')), B = snapshot(A.texts, A.learned);
-  let maxRel = 0, nRes = 0;
-  const near = (x, y, what) => {
-    const d = Math.abs(x - y), m = Math.max(Math.abs(x), Math.abs(y));
-    if (d) maxRel = Math.max(maxRel, d / m);
+  test('Snapshot: Datei vorhanden', () => assert.ok(fs.existsSync(snapFile), 'Datei fehlt: ' + snapFile));
+  if (fs.existsSync(snapFile)) {
+    const A = JSON.parse(fs.readFileSync(snapFile, 'utf8')), B = snapshot(A.texts, A.learned);
     // 1e-9 relativ, plus eine Rundungsstelle von toFixed(9)
-    assert.ok(d <= 1e-9 * m + 1.01e-9, `${what}: ${x} statt ${y}`);
-  };
-  ['plain', 'debug10', 'withLearned', 'withLearnedDebug10'].forEach(k => test('Snapshot ' + k, () => {
-    A[k].forEach((ra, i) => {
-      const rb = B[k][i], w = `${k}[${i}] ${JSON.stringify(A.texts[i]).slice(0, 50)}`;
-      assert.deepStrictEqual(rb.map(r => r.c), ra.map(r => r.c), w + ' Codes/Reihenfolge');
-      ra.forEach((x, j) => {
-        const y = rb[j]; nRes++;
-        assert.deepStrictEqual([y.byCode, y.m, !!y.l], [x.byCode, x.m, !!x.l], `${w} #${j} byCode/matched/learned`);
-        near(y.s, x.s, `${w} #${j} score`); near(y.rel, x.rel, `${w} #${j} rel`);
-        if (x.l) { assert.deepStrictEqual([y.l.t, y.l.base], [x.l.t, x.l.base], `${w} #${j} learned`); near(y.l.sim, x.l.sim, `${w} #${j} sim`); }
-      });
+    const near = (x, y) => Math.abs(x - y) <= 1e-9 * Math.max(Math.abs(x), Math.abs(y)) + 1.01e-9;
+    const fmt = l => l.map(r => r.c + ':' + r.s.toFixed(2) + (r.l ? '[L' + r.l.sim.toFixed(2) + ']' : '')).join(' ') || '-';
+    const same = (a, b) => a.length === b.length && a.every((x, j) => {
+      const y = b[j];
+      return x.c === y.c && x.byCode === y.byCode && JSON.stringify(x.m) === JSON.stringify(y.m) && near(x.s, y.s) && near(x.rel, y.rel) &&
+        !!x.l === !!y.l && (!x.l || (x.l.t === y.l.t && x.l.base === y.l.base && near(x.l.sim, y.l.sim)));
     });
-  }));
-  test('Snapshot prepare/learnable', () => {
-    assert.deepStrictEqual(B.prepare, A.prepare);
-    assert.deepStrictEqual(B.learnable, A.learnable);
-  });
-  console.log(`Snapshot: ${A.texts.length} Texte, ${nRes} Vorschläge verglichen, grösste rel. Abweichung ${maxRel}`);
+    const diffs = [];
+    A.texts.forEach((t, i) => {
+      const d = [];
+      if (A.prepare[i].cleaned !== B.prepare[i].cleaned) d.push(`bereinigt: ${JSON.stringify(A.prepare[i].cleaned)} -> ${JSON.stringify(B.prepare[i].cleaned)}`);
+      if (JSON.stringify(A.prepare[i].removed) !== JSON.stringify(B.prepare[i].removed)) d.push(`entfernt: ${A.prepare[i].removed.join(',')} -> ${B.prepare[i].removed.join(',')}`);
+      if (JSON.stringify(A.prepare[i].abbreviations) !== JSON.stringify(B.prepare[i].abbreviations)) d.push(`Abkürzungen: ${A.prepare[i].abbreviations} -> ${B.prepare[i].abbreviations}`);
+      if (A.learnable[i] !== B.learnable[i]) d.push(`lernbar: ${JSON.stringify(A.learnable[i])} -> ${JSON.stringify(B.learnable[i])}`);
+      ['plain', 'debug10', 'withLearned', 'withLearnedDebug10'].forEach(k => { if (!same(A[k][i], B[k][i])) d.push(`${k}: ${fmt(A[k][i])} -> ${fmt(B[k][i])}`); });
+      if (d.length) diffs.push(`#${i} ${JSON.stringify(t).slice(0, 90)}\n      ` + d.join('\n      '));
+    });
+    diffs.forEach(d => console.log('   ' + d));
+    console.log(`Snapshot: ${A.texts.length} Texte verglichen, ${diffs.length} verschieden`);
+    test('Snapshot unverändert', () => assert.strictEqual(diffs.length, 0, `${diffs.length} Texte verschieden (siehe oben)`));
+  }
 }
 
 // ------------------------------------------------------------------
-// b) Auswertung mit früheren Fällen
+// b) Bereinigung: Signatur, Grussformeln, Kontaktdaten, Nummern, Namen
+// ------------------------------------------------------------------
+const P = 'Das Fotobuch ist nicht angekommen.';
+test('Signatur-Trenner und Fusszeilen von Geräten', () => {
+  [P + '\n\nVon meinem iPhone gesendet', P + '\nVon meinem Samsung Galaxy Smartphone gesendet', P + '\nGesendet von meinem iPad',
+    P + '\nSent from my iPhone', P + '\nGet Outlook for Android', P + '\nVon Outlook für iOS gesendet',
+    P + '\n-- \nAnna Beispiel\nBeispielweg 3', P + '\n--\nAnna Beispiel', P + '\n\n--  \nMax Muster\nBeispielfirma AG']
+    .forEach(t => assert.strictEqual(E.prepare(t).cleaned, P, JSON.stringify(t)));
+  assert.ok(E.prepare(P + '\n--\nAnna').removed.includes('Grussformel/Signatur'));
+  // gleicher Text mit und ohne Fusszeile = gleicher bereinigter Text (zählt in der Auswertung als gleicher Text)
+  assert.strictEqual(E.prepare('Die Tasse hat einen Sprung.\nSent from my iPhone').cleaned, E.prepare('Die Tasse hat einen Sprung.').cleaned);
+});
+test('Grussformel ohne Text davor: ab hier Signatur', () => {
+  [['Hallo zusammen\n\nVielen Dank und liebe Grüsse\nPeter Muster', ''],
+    ['Die Tasse ist kaputt.\nVielen Dank und freundliche Grüsse\nPeter Muster', 'Die Tasse ist kaputt.'],
+    ['Die Tasse ist kaputt.\nDanke und LG\nPeter', 'Die Tasse ist kaputt.'],
+    ['Guten Tag\n\nFreundliche Grüsse\nAnna Beispiel', ''], ['Guten Tag\n\nFreundliche Grüsse', ''], ['Liebe Grüsse', ''],
+    ['Grüezi\nFreundliche Grüsse\nHans Meier', ''], ['Guten Tag\n\nFreundliche Grüsse, Anna Beispiel', ''], ['LG Anna', ''],
+    ['Danke!\n\nVon meinem iPhone gesendet', ''], ['Vielen Dank.\nAnna Beispiel\nBeispielweg 3', ''],
+    ['Guten Tag Herr Muster\n\n--\nAnna Beispiel\nBeispielweg 3', ''],
+    ['Guten Tag\n\nSiehe Anhang.\n\nFreundliche Grüsse\nMaria Muster', 'Siehe Anhang.'],
+    // Dank als erste Zeile, danach Inhalt: nur der Dank fällt weg
+    ['Danke!\nDas Paket ist aber immer noch nicht angekommen.', 'Das Paket ist aber immer noch nicht angekommen.'],
+    ['Grüss Gott\nMein Fotobuch ist nicht angekommen.', 'Mein Fotobuch ist nicht angekommen.']]
+    .forEach(([t, exp]) => assert.strictEqual(E.prepare(t).cleaned, exp, JSON.stringify(t)));
+});
+test('Inhalt bleibt (Kürzel, Grüsse im Satz, ähnliche Zeilen)', () => {
+  ['LG Fotobuch kaputt angekommen', 'VG Rechnung doppelt', 'VG Rechnung', 'Grüsse aus den Ferien, das Fotobuch ist nie angekommen',
+    'Von meinem Konto wurde doppelt abgebucht, obwohl ich alles gesendet', 'Gesendet von meinem Mann, aber nie angekommen',
+    'Kd. hat FB n. erh. -- Tracking prüfen', 'Seite 12 fehlt, Format A4, Rahmen 30x40', 'Die Frau am Telefon war unfreundlich',
+    'Frau hat angerufen, Paket fehlt', 'Mo-Fr. Paket kommt nicht', 'Windows 11: Software stürzt ab', 'Gutscheincode funktioniert nicht']
+    .forEach(t => assert.strictEqual(E.prepare(t).cleaned, t, JSON.stringify(t)));
+  assert.strictEqual(E.learnText('LG Fotobuch kaputt angekommen'), 'LG Fotobuch kaputt angekommen');
+  assert.deepStrictEqual(codes(E.classify('LG Fotobuch kaputt angekommen')), codes(E.classify('Fotobuch kaputt angekommen')));
+});
+test('Formularfelder: Kontaktdaten weg, Notiz bleibt', () => {
+  [['Telefon: Kundin sagt, FB nicht erhalten', 'Kundin sagt, FB nicht erhalten', []],
+    ['Telefon: 079 123 45 67\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
+    ['Name: Anna Beispiel\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
+    ['Name: Anna Maria von Beispiel-Muster\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
+    ['E-Mail: anna@example.com\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']],
+    ['Adresse: Beispielweg 3, 8000 Zürich\nFotobuch fehlt', 'Fotobuch fehlt', ['Kontaktdaten']]]
+    .forEach(([t, exp, rm]) => { const p = E.prepare(t); assert.strictEqual(p.cleaned, exp, t); assert.deepStrictEqual(p.removed, rm, t); });
+  assert.deepStrictEqual(codes(E.classify('Telefon: Kundin sagt, FB nicht erhalten')), codes(E.classify('Kundin sagt, FB nicht erhalten')));
+});
+test('Konto-, Karten-, Telefon-, Referenznummern, Adressen und Namen werden entfernt', () => {
+  // [Text, darf nicht bleiben, Grund in "removed", muss bleiben]
+  [['Bitte Rückerstattung auf IBAN CH93 0076 2011 6238 5295 7 überweisen.', ['CH93', '0076', '6238', '5295'], 'Konto-/Kartennummern', ['Rückerstattung auf IBAN überweisen']],
+    ['Bitte auf CH56 0483 5012 3456 7800 9 zurückzahlen', ['CH56', '0483', '7800'], 'Konto-/Kartennummern', ['zurückzahlen']],
+    ['Konto CH5604835012345678009, doppelt bezahlt', ['CH56', '0483'], 'Konto-/Kartennummern', ['Konto', 'doppelt bezahlt']],
+    ['IBAN DE89 3704 0044 0532 0130 00 und AT61 1904 3002 3457 3201 angegeben', ['DE89', '3704', 'AT61', '3201'], 'Konto-/Kartennummern', ['angegeben']],
+    ['Karte 4111 1111 1111 1111 doppelt belastet', ['4111', '1111'], 'Konto-/Kartennummern', ['Karte doppelt belastet']],
+    ['Karte 5500-0000-0000-0004 doppelt belastet', ['5500', '0004'], 'Konto-/Kartennummern', ['doppelt belastet']],
+    ['Rückruf auf +41 (0)44 123 45 67 erwünscht', ['41', '44', '123', '67'], 'Telefonnummern', ['Rückruf auf erwünscht']],
+    ['Rückruf auf 0041 79 123 45 67 erwünscht', ['0041', '79', '123'], 'Telefonnummern', ['Rückruf auf erwünscht']],
+    ['Rückruf auf +41 79 123 45 67 erwünscht', ['41', '79', '123'], 'Telefonnummern', ['Rückruf auf erwünscht']],
+    ['Tel.079 555 12 34, Paket fehlt', ['079', '555'], 'Telefonnummern', ['Paket fehlt']],
+    ['Auftrag A-938794 prüfen', ['938794'], 'Daten/Nummern', ['Auftrag A prüfen']],
+    ['RE-2026/48213 doppelt bezahlt', ['2026', '48213'], 'Daten/Nummern', ['RE doppelt bezahlt']],
+    ['Ticket #123456 noch offen', ['123456', '#'], 'Daten/Nummern', ['Ticket noch offen']],
+    ['Bestellung Nr.1234567 fehlt', ['1234567'], 'Daten/Nummern', ['Bestellung Nr fehlt']],
+    ['Neue Adresse Seestr. 50, bitte ändern', ['Seestr', '50'], 'Adressen', ['Neue Adresse', 'bitte ändern']],
+    ['Lieferung an Hauptstr 3a geht nicht', ['Hauptstr', '3a'], 'Adressen', ['Lieferung an', 'geht nicht']],
+    ['Abholung am Bahnhofpl. 1 gewünscht', ['Bahnhofpl', ' 1 '], 'Adressen', ['Abholung am', 'gewünscht']],
+    ['Frau Müller ruft an, FB n. erh.', ['Müller'], 'Namen', ['Frau ruft an, FB n. erh.']],
+    ['Rückruf Hr. Hans Meier: Rechnung doppelt', ['Hans', 'Meier'], 'Namen', ['Rückruf Hr.', 'Rechnung doppelt']],
+    ['Herr Meier Rechnung doppelt bezahlt', ['Meier'], 'Namen', ['Herr Rechnung doppelt bezahlt']],
+    ['Paket für Herrn Beispiel kam zurück', ['Beispiel'], 'Namen', ['Paket für Herrn kam zurück']],
+    ['Familie Keller wartet auf das Paket', ['Keller'], 'Namen', ['Familie wartet auf das Paket']],
+    ['Fam. Keller und Fr. Frei warten', ['Keller', 'Frei'], 'Namen', ['Fam.', 'und Fr.', 'warten']]]
+    .forEach(([t, gone, why, keep]) => {
+      const p = E.prepare(t);
+      gone.forEach(g => assert.ok(!p.cleaned.includes(g), `${t} -> ${p.cleaned} (enthält ${g})`));
+      keep.forEach(k => assert.ok(p.cleaned.includes(k), `${t} -> ${p.cleaned} (ohne ${k})`));
+      assert.ok(p.removed.includes(why), `${t}: ${p.removed}`);
+    });
+  // "RE" bleibt und wird ausgeschrieben
+  assert.ok(E.prepare('RE-2026/48213 doppelt bezahlt').text.includes('Rechnung'));
+  // Vorschläge ändern sich durch das Entfernen nicht
+  assert.deepStrictEqual(codes(E.classify('Kreditkarte doppelt belastet, Karte 4111 1111 1111 1111 bitte prüfen')), codes(E.classify('Kreditkarte doppelt belastet, Karte bitte prüfen')));
+});
+test('lernbar / learnText', () => {
+  assert.strictEqual(E.LEARN_MAX, 1000);
+  ['Siehe Anhang', 'Siehe Anhang.', 'siehe Anhang!', 'Anhang', 'Anbei im Anhang', 'Beilage', 'Guten Tag\n\nFreundliche Grüsse', 'Freundliche Grüsse',
+    'Liebe Grüsse\nAnna', 'Guten Tag\n\nSiehe Anhang.\n\nFreundliche Grüsse\nMaria Muster', 'Danke!\n\nVon meinem iPhone gesendet', 'Grüezi\nFreundliche Grüsse\nHans Meier',
+    'Kd. hat FB n. erh.', '', 'x']
+    .forEach(t => { assert.strictEqual(E.learnable(t), '', JSON.stringify(t)); assert.strictEqual(E.learnText(t), '', JSON.stringify(t)); });
+  base.forEach(b => assert.strictEqual(E.learnText(b.t), E.learnable(b.t).slice(0, 1000)));
+  const long = 'Guten Tag\n\n' + 'Das Fotobuch ist leider mit Kratzern auf dem Umschlag angekommen. '.repeat(40) + '\n\nFreundliche Grüsse\nAnna Beispiel';
+  assert.ok(E.learnable(long).length > 1000);
+  assert.strictEqual(E.learnText(long), E.learnable(long).slice(0, 1000));
+  assert.strictEqual(E.learnText(long).length, 1000);
+  // nach dem Lernen keine Vorschläge aus "Siehe Anhang"-Fällen
+  E.setExamples(['Siehe Anhang.', 'Anhang', 'Anbei im Anhang'].map((t, i) => ({ t: E.learnText(t), c: ['50410', '511', '315'][i] })));
+  assert.deepStrictEqual(codes(E.classify('Siehe Anhang')), []);
+  assert.ok(codes(E.classify('Die Tasse ist kaputt, siehe Anhang')).every(c => !['50410', '511', '315'].includes(c)));
+  E.setExamples([]);
+});
+test('Literale mit gleichen Wörtern, aber anderem Modus', () => {
+  const hits = q => E.classify(q, { debug: true, max: 99, minAbs: 0.0001, rel: 0.0001 }).flatMap(r => (r.hits || []).map(h => r.c.code + ' ' + h.src));
+  // Bezeichnung "paket"/"rand" (Wortanfang/ganzes Wort) darf nicht wie die Regel (irgendwo im Wort) treffen
+  assert.ok(!hits('Das Ersatzpaket ist beschädigt angekommen').some(h => / lbl:paket$/.test(h)));
+  assert.ok(!hits('Beim Randbereich fehlt ein Stück').some(h => / lbl:rand$/.test(h)));
+  assert.ok(hits('Das Paket ist beschädigt angekommen').some(h => / lbl:paket$/.test(h)));
+  assert.ok(hits('Der Rand ist abgeschnitten').some(h => / lbl:rand$/.test(h)));
+  // Regel mit "farbe" (irgendwo im Wort) trifft auch zusammengesetzte Wörter
+  assert.ok(hits('Beim Rahmen stimmt die Wunschfarbe nicht').some(h => /^10117 .*farbe/.test(h)));
+  assert.strictEqual(codes(E.classify('Beim Rahmen stimmt die Wunschfarbe nicht'))[0], '10117');
+});
+
+// ------------------------------------------------------------------
+// c) Auswertung mit früheren Fällen
 // ------------------------------------------------------------------
 const PRE = ['Kd. meldet: ', 'Notiz: ', 'Kundin schreibt, ', 'Rückruf: ', 'Nachtrag: '];
 const POST = ['', '', ' Bitte prüfen.', ' Dringend.', ' Wie besprochen.'];
@@ -115,12 +236,18 @@ const LACK = lonely[2];
 ['Der Zauberlack auf dem Cover glänzt nicht gleichmässig', 'Zauberlack blättert nach einer Woche ab',
   'Kunde fragt, ob der Zauberlack auch für Kalender erhältlich ist', 'Beim Zauberlack sind Schlieren sichtbar',
   'Zauberlack riecht stark, Kundin ist unsicher', 'Zauberlack fehlt auf der Rückseite'].forEach(t => synth.push({ t, c: LACK }));
-// nicht verwendbar
+// kurze Notizen: werden getestet, sind aber zu kurz zum Lernen
+const SHORT = [{ t: 'Kd. hat FB n. erh.', c: '50410' }, { t: 'FB n. erh.', c: '50410' }, { t: 'Paket nicht erhalten', c: '50410' }];
+SHORT.forEach(x => synth.push(x));
+// nicht verwendbar (unbekannter Code oder leer) bzw. nur Test (zu kurz)
 const BAD = [{ t: 'Paket nicht angekommen, Tracking zeigt nichts', c: '99999' }, { t: 'Rechnung doppelt erhalten', c: '' }, { t: 'Rechnung doppelt erhalten' },
-  { t: 'x', c: '50410' }, { t: '', c: '50410' }, { t: 'Guten Tag\n\nFreundliche Grüsse', c: '50410' }, { c: '50410' }, null];
+  { t: 'x', c: '50410' }, { t: '', c: '50410' }, { t: 'Guten Tag\n\nFreundliche Grüsse', c: '50410' }, { t: 'Siehe Anhang.', c: '511' }, { c: '50410' }, null];
 const cases = synth.concat(BAD);
-const isUsable = x => !!(x && x.c != null && E.byCode.hasOwnProperty(String(x.c).trim()) && E.learnable(x.t == null ? '' : String(x.t)));
+const known = x => !!(x && x.c != null && E.byCode.hasOwnProperty(String(x.c).trim()));
+const text = x => x && x.t != null ? String(x.t) : '';
+const isUsable = x => known(x) && hasWord(E.prepare(text(x)).cleaned);
 const usableIdx = cases.map((x, i) => isUsable(x) ? i : -1).filter(i => i >= 0);
+const keyOf = t => E.norm(E.prepare(t).cleaned);
 
 E.setExamples([]);
 const plain = cases.map(x => x && x.t ? codes(E.classify(x.t)) : null);   // Stand ohne gelernte Fälle
@@ -149,6 +276,16 @@ test('Auswertung in Etappen', () => {
 const R = ctl.result() || {}, D = R.details || [], byI = {};
 D.forEach(d => { byI[d.i] = d; });
 
+test('Bericht: Felder wie vereinbart', () => {
+  assert.deepStrictEqual(Object.keys(R).filter(k => k !== 'details'), ['total', 'usable', 'skipped', 'zuKurzZumLernen', 'sameText', 'nearDup',
+    'tested', 'sampleEvery', 'variants', 'perCode', 'confusions', 'triggers', 'words', 'errors']);
+  assert.deepStrictEqual(Object.keys(R.skipped), ['unbekannterCode', 'leer']);
+  assert.deepStrictEqual(Object.keys(R.confusions), ['regeln', 'gelernt']);
+  R.variants.forEach(v => assert.deepStrictEqual(Object.keys(v), ['id', 'name', 'n', 'top1', 'top3', 'none']));
+  R.errors.forEach(e => assert.deepStrictEqual(Object.keys(e), ['i', 'c', 'regeln', 'gelernt']));
+  assert.strictEqual(typeof E.learnText, 'function');
+  assert.strictEqual(typeof E.evaluation, 'function');
+});
 test('gelernte Fälle des Tools unverändert', () => {
   assert.strictEqual(full(), before);
   E.setExamples([]);
@@ -162,22 +299,50 @@ test('Auswertung unabhängig von gelernten Fällen des Tools', () => {
   E.setExamples(LEARNED);
 });
 test('übersprungene Fälle gezählt', () => {
-  const unknown = cases.filter(x => !(x && x.c != null && E.byCode.hasOwnProperty(String(x.c).trim()))).length;
-  assert.deepStrictEqual(R.skipped, { unbekannterCode: unknown, zuWenigText: cases.length - unknown - usableIdx.length });
+  const unknown = cases.filter(x => !known(x)).length;
+  assert.deepStrictEqual(R.skipped, { unbekannterCode: unknown, leer: cases.length - unknown - usableIdx.length });
   assert.strictEqual(R.skipped.unbekannterCode, 4);
-  assert.ok(R.skipped.zuWenigText >= 4);
+  assert.strictEqual(R.skipped.leer, 3);   // '', nur Anrede/Grussformel, ohne Text
   assert.strictEqual(R.total, cases.length);
   assert.strictEqual(R.usable, usableIdx.length);
   assert.strictEqual(R.tested, usableIdx.length);
   assert.strictEqual(R.sampleEvery, 1);
   assert.deepStrictEqual(D.map(d => d.i), usableIdx);
+  assert.strictEqual(R.zuKurzZumLernen, usableIdx.filter(i => !E.learnText(text(cases[i]))).length);
+  D.forEach(d => assert.strictEqual(d.lernbar, !!E.learnText(text(cases[d.i])), `Fall ${d.i}`));
+});
+test('kurze Notizen werden getestet', () => {
+  assert.ok(R.zuKurzZumLernen >= SHORT.length + 2, R.zuKurzZumLernen);   // + 'x' und 'Siehe Anhang.'
+  SHORT.forEach(x => {
+    const d = byI[cases.indexOf(x)];
+    assert.ok(d, 'getestet: ' + x.t);
+    assert.strictEqual(d.lernbar, false);
+    assert.strictEqual(d.top.regeln[0], '50410', JSON.stringify(d.top));
+  });
+  const pc = R.perCode.find(p => p.code === '50410');
+  assert.ok(pc && pc.n >= SHORT.length + 1, JSON.stringify(pc));   // auch pro Code mitgezählt
+  // Notizen, die zu kurz zum Lernen sind, sind nie ähnliche Fälle; lernbare schon
+  const code = lonely[3], extra = [{ t: 'Lack', c: code }, { t: 'Lack matt', c: code }];
+  assert.ok(!E.learnText(extra[0].t) && E.learnText(extra[1].t));
+  const r = evalAll(E, synth.concat(extra)), dd = r.details.filter(d => d.i >= synth.length);
+  assert.strictEqual(dd.length, 2);
+  assert.ok(!dd[1].top.nurfaelle.includes(code), JSON.stringify(dd[1].top));   // "Lack" ist nicht im Index
+  assert.strictEqual(dd[0].top.nurfaelle[0], code, JSON.stringify(dd[0].top));  // "Lack matt" schon
 });
 test('"regeln" = classify() ohne gelernte Fälle', () => {
+  // gilt, solange BEISPIELE leer ist (sonst zählen die eingebauten Beispiele mit)
+  assert.strictEqual(ctx.B.length, 0);
   D.forEach(d => assert.deepStrictEqual(d.top.regeln, plain[d.i], `Fall ${d.i}: ${cases[d.i].t.slice(0, 60)}`));
 });
-test('Varianten gezählt', () => {
+test('Varianten gezählt und benannt', () => {
   assert.deepStrictEqual(R.variants.map(v => v.id), E.VARIANTS.map(v => v.id));
-  assert.deepStrictEqual(R.variants.map(v => v.id), ['regeln', 'gelernt', 'max20', 'max80', 'top3_20', 'top3_40', 'top3_80', 'nurfaelle']);
+  assert.deepStrictEqual(R.variants.map(v => [v.id, v.name]), [
+    ['regeln', 'Nur Stichwörter (so wie heute)'], ['gelernt', 'Mit importierten Fällen'],
+    ['gelernt_streng', 'Mit importierten Fällen, ohne fast gleiche Texte'],
+    ['max20', 'Mit Fällen, Gewicht 20'], ['max80', 'Mit Fällen, Gewicht 80'],
+    ['top3_20', 'Mit Fällen, mehrere ähnliche, Gewicht 20'], ['top3_40', 'Mit Fällen, mehrere ähnliche, Gewicht 40'],
+    ['top3_80', 'Mit Fällen, mehrere ähnliche, Gewicht 80'], ['nurfaelle', 'Nur importierte Fälle (ohne Stichwörter)']]);
+  E.VARIANTS.forEach(v => assert.ok(!/ß/.test(v.name), v.name));
   R.variants.forEach(v => {
     const t = D.map(d => d.top[v.id]);
     assert.deepStrictEqual([v.n, v.top1, v.top3, v.none],
@@ -186,28 +351,94 @@ test('Varianten gezählt', () => {
   });
   const V = {}; R.variants.forEach(v => { V[v.id] = v; });
   // die leicht veränderte Kopie wird als ähnlicher Fall gefunden
-  assert.ok(V.nurfaelle.top3 >= 0.8 * V.nurfaelle.n, JSON.stringify(V.nurfaelle));
+  assert.ok(V.nurfaelle.top3 >= 0.75 * V.nurfaelle.n, JSON.stringify(V.nurfaelle));
   assert.ok(V.gelernt.top3 >= V.regeln.top3, JSON.stringify([V.gelernt, V.regeln]));
+  // ohne fast gleiche Texte: nie besser als mit ihnen, wenn es fast gleiche Texte gibt
+  assert.ok(V.gelernt_streng.top3 <= V.gelernt.top3, JSON.stringify([V.gelernt_streng, V.gelernt]));
 });
 test('Leave-one-out: eigener Code nie aus dem Fall selbst', () => {
   const iu = cases.indexOf(UNIQUE);
   assert.ok(byI[iu], 'eindeutiger Fall getestet');
   assert.ok(!byI[iu].top.nurfaelle.includes(UNIQUE.c), JSON.stringify(byI[iu].top));
-  // allgemein: Code nur einmal unter den verwendbaren Fällen -> "nurfaelle" kann ihn nicht liefern
-  const n = {}; usableIdx.forEach(i => { n[cases[i].c] = (n[cases[i].c] || 0) + 1; });
-  D.filter(d => n[d.c] === 1 && !ctx.B.some(b => b.c === d.c)).forEach(d => assert.ok(!d.top.nurfaelle.includes(d.c), `Fall ${d.i}`));
+  // allgemein: Code nur einmal unter den lernbaren Fällen und der Fall selbst ist lernbar -> "nurfaelle" kann ihn nicht liefern
+  const n = {}; usableIdx.filter(i => E.learnText(text(cases[i]))).forEach(i => { n[cases[i].c] = (n[cases[i].c] || 0) + 1; });
+  D.filter(d => d.lernbar && n[d.c] === 1).forEach(d => assert.ok(!d.top.nurfaelle.includes(d.c), `Fall ${d.i}`));
 });
-test('exakte Duplikate schliessen sich gegenseitig aus', () => {
+test('exakte Duplikate schliessen sich gegenseitig aus, fast gleiche zählen (und werden gezählt)', () => {
   const T = 'Die Glanzfolie auf dem Umschlag löst sich an den Ecken ab und wirft Blasen';
   const code = lonely[1];
-  const dup = [{ t: T, c: code }, { t: '  ' + T + ' !!', c: code }, { t: T.toUpperCase(), c: code }];   // gleicher bereinigter Text
-  const c1 = E.evaluation(synth.concat(dup), { details: true }); c1.step();
-  const d1 = c1.result().details.filter(d => d.i >= synth.length);
-  assert.strictEqual(d1.length, 3);
-  d1.forEach(d => assert.ok(!d.top.nurfaelle.includes(code), JSON.stringify(d.top.nurfaelle)));
-  // Gegenprobe: leicht anderer Text zählt als ähnlicher Fall
-  const c2 = E.evaluation(synth.concat([dup[0], { t: 'Kd. meldet: ' + T, c: code }]), { details: true }); c2.step();
-  c2.result().details.filter(d => d.i >= synth.length).forEach(d => assert.strictEqual(d.top.nurfaelle[0], code, JSON.stringify(d.top.nurfaelle)));
+  const dup = [{ t: T, c: code }, { t: '  ' + T + ' !!', c: code }, { t: T.toUpperCase(), c: code }, { t: T + '\n\nVon meinem iPhone gesendet', c: code }];   // gleicher bereinigter Text
+  const r1 = evalAll(E, synth.concat(dup)), d1 = r1.details.filter(d => d.i >= synth.length);
+  assert.strictEqual(d1.length, 4);
+  d1.forEach(d => { assert.ok(!d.top.nurfaelle.includes(code), JSON.stringify(d.top.nurfaelle)); assert.strictEqual(d.nearDup, false); });
+  // Gegenprobe: leicht anderer Text zählt als ähnlicher Fall ("Mit importierten Fällen"), ist aber ein fast gleicher Text
+  const r2 = evalAll(E, synth.concat([dup[0], { t: 'Kundin schreibt, ' + T, c: code }])), d2 = r2.details.filter(d => d.i >= synth.length);
+  assert.ok(!d2[0].top.regeln.includes(code), 'Voraussetzung: Stichwörter finden den Code nicht');
+  d2.forEach(d => {
+    assert.strictEqual(d.top.nurfaelle[0], code, JSON.stringify(d.top.nurfaelle));
+    assert.ok(d.top.gelernt.includes(code), JSON.stringify(d.top.gelernt));          // nicht stillschweigend ausgeschlossen
+    assert.strictEqual(d.nearDup, true);
+    assert.ok(!d.top.gelernt_streng.includes(code), JSON.stringify(d.top.gelernt_streng));
+  });
+  assert.strictEqual(r2.nearDup - r2.details.filter(d => d.i < synth.length && d.nearDup).length, 2);
+});
+test('sameText und nearDup', () => {
+  const kn = {}; usableIdx.forEach(i => { const k = keyOf(text(cases[i])); kn[k] = (kn[k] || 0) + 1; });
+  assert.strictEqual(R.sameText, usableIdx.filter(i => kn[keyOf(text(cases[i]))] > 1).length);
+  assert.ok(R.sameText > 0);
+  assert.strictEqual(R.nearDup, D.filter(d => d.nearDup).length);
+  // kleines Beispiel: 2 gleiche Texte (mit Fusszeile), 2 fast gleiche, 1 anderer
+  const code = lonely[1], T = 'Der Zauberlack auf der Leinwand blättert an den Rändern ab';
+  const mini = [{ t: T, c: code }, { t: T + '\nSent from my iPhone', c: code }, { t: 'Rechnung doppelt erhalten, bitte eine stornieren', c: '50103' },
+    { t: 'Die Tasse hat nach dem Spülen Risse in der Glasur', c: lonely[4] }, { t: 'Leider: die Tasse hat nach dem Spülen Risse in der Glasur', c: lonely[4] }];
+  const r = evalAll(E, mini);
+  assert.strictEqual(r.sameText, 2);
+  assert.strictEqual(r.nearDup, 2);
+  assert.deepStrictEqual(r.details.map(d => d.nearDup), [false, false, false, true, true]);
+});
+test('eingebaute Beispiele (BEISPIELE) mit gleichem Text zählen nicht', () => {
+  const cs = synth.slice(0, 120).concat([UNIQUE]);
+  const E0 = engineWith([]), r0 = evalAll(E0, cs);
+  const EB = engineWith(cs.map(x => ({ t: E.learnText(x.t), c: x.c })).filter(x => x.t)), rB = evalAll(EB, cs);
+  const iu = cs.length - 1, d0 = r0.details.find(d => d.i === iu), dB = rB.details.find(d => d.i === iu);
+  assert.ok(!d0.top.regeln.includes(UNIQUE.c), 'Voraussetzung: Stichwörter finden den Code nicht');
+  ['regeln', 'gelernt', 'gelernt_streng', 'nurfaelle'].forEach(id => assert.ok(!dB.top[id].includes(UNIQUE.c), id + ' ' + JSON.stringify(dB.top)));
+  // nicht 100 %: jeder Fall findet sich nicht selbst
+  const V = {}; rB.variants.forEach(v => { V[v.id] = v; });
+  assert.ok(V.regeln.top1 < V.regeln.n && V.nurfaelle.top1 < V.nurfaelle.n, JSON.stringify(rB.variants));
+  // ein leicht anderer Text als Beispiel zählt, aber nicht ohne fast gleiche Texte
+  const EN = engineWith([{ t: 'Kundin schreibt, ' + UNIQUE.t, c: UNIQUE.c }]), dN = evalAll(EN, cs).details.find(d => d.i === iu);
+  assert.ok(dN.top.regeln.includes(UNIQUE.c) && dN.top.gelernt.includes(UNIQUE.c), JSON.stringify(dN.top));
+  assert.ok(!dN.top.gelernt_streng.includes(UNIQUE.c), JSON.stringify(dN.top));
+  assert.strictEqual(dN.nearDup, false);   // zählt nur importierte Fälle
+  // langer Text: das Beispiel ist der gekürzte gespeicherte Text (learnText) und zählt trotzdem als gleicher Text
+  const long = { t: 'Guten Tag\n\n' + 'Die Glanzfolie auf dem Umschlag hat Blasen und löst sich an den Ecken. '.repeat(20) + '\n\nFreundliche Grüsse\nAnna Beispiel', c: UNIQUE.c };
+  assert.ok(E.learnable(long.t).length > 1000);
+  const EL = engineWith([{ t: E.learnText(long.t), c: long.c }]), dL = evalAll(EL, synth.slice(0, 40).concat([long])).details.find(d => d.i === 40);
+  ['regeln', 'gelernt', 'nurfaelle'].forEach(id => assert.ok(!dL.top[id].includes(long.c), id + ' ' + JSON.stringify(dL.top)));
+});
+test('ähnliche Fälle = gespeicherter Text (learnText, höchstens LEARN_MAX Zeichen)', () => {
+  // zwei lange Mails mit gleichem Code: vorne nur Füllwörter (ohne Stämme), das Entscheidende erst nach 1000 Zeichen
+  const FILL = 'Ich habe leider schon wieder eine Frage, weil es doch immer noch nicht geht und ich jetzt auch nicht mehr weiss, was ich machen soll. ';
+  const code = lonely[5], mk = (n, tail) => ({ t: FILL.repeat(n) + tail, c: code });
+  const tails = ['Der Zauberlack auf dem Kalender blättert ab und riecht stark.', 'Beim Kalender blättert der Zauberlack ab, er riecht stark.'];
+  const longs = tails.map(x => mk(9, x)), shorts = tails.map(x => mk(1, x));
+  assert.ok(longs.every(x => E.learnable(x.t).length > 1000 && !E.learnable(E.learnText(x.t))), 'gespeicherter Text ohne Inhalt');
+  assert.ok(shorts.every(x => E.learnText(x.t).includes('Zauberlack')));
+  const others = synth.slice(0, 40);
+  const rl = evalAll(E, others.concat(longs)).details.filter(d => d.i >= 40), rs = evalAll(E, others.concat(shorts)).details.filter(d => d.i >= 40);
+  assert.strictEqual(rl.length, 2);
+  rl.forEach(d => assert.ok(!d.top.nurfaelle.includes(code), 'lang ' + JSON.stringify(d.top)));
+  rs.forEach(d => assert.strictEqual(d.top.nurfaelle[0], code, 'kurz ' + JSON.stringify(d.top)));
+  // gleich wie im Tool nach dem Lernen der gespeicherten Texte (der gesuchte Text bleibt vollständig)
+  const learnedCodes = q => E.classify(q, { max: 99, rel: 0.0001, minAbs: 0.0001 }).filter(r => r.learned).map(r => r.c.code);
+  E.setExamples([{ t: E.learnText(longs[1].t), c: code }]);
+  assert.deepStrictEqual(learnedCodes(longs[0].t), []);
+  E.setExamples([{ t: E.learnable(longs[1].t), c: code }]);   // Gegenprobe: ungekürzt gespeichert würde er gefunden
+  assert.deepStrictEqual(learnedCodes(longs[0].t), [code]);
+  E.setExamples([{ t: E.learnText(shorts[1].t), c: code }]);
+  assert.deepStrictEqual(learnedCodes(shorts[0].t), [code]);
+  E.setExamples(LEARNED);
 });
 test('Stichprobe bei mehr als maxTests Fällen', () => {
   const c3 = E.evaluation(cases, { maxTests: 40, details: true }); c3.step();
@@ -218,7 +449,9 @@ test('Stichprobe bei mehr als maxTests Fällen', () => {
   assert.strictEqual(r.tested, r.details.length);
   assert.ok(r.tested <= 40);
   r.variants.forEach(v => assert.strictEqual(v.n, r.tested));
-  // alle verwendbaren Fälle bleiben Nachbarn: gleiche Vorschläge wie ohne Stichprobe
+  assert.strictEqual(r.nearDup, r.details.filter(d => d.nearDup).length);
+  assert.strictEqual(r.sameText, R.sameText);   // über alle verwendbaren Fälle
+  // alle lernbaren Fälle bleiben Nachbarn: gleiche Vorschläge wie ohne Stichprobe
   r.details.forEach(d => assert.deepStrictEqual(d.top, byI[d.i].top, `Fall ${d.i}`));
 });
 test('Bericht: pro Code, Verwechslungen, Auslöser, Fehlgriffe', () => {
@@ -233,6 +466,7 @@ test('Bericht: pro Code, Verwechslungen, Auslöser, Fehlgriffe', () => {
   const exp = Object.values(pc).map(p => ({ ...p, wrong: Object.entries(p.wrong).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 3) }))
     .sort((a, b) => b.n - a.n || (a.code < b.code ? -1 : 1));
   assert.deepStrictEqual(R.perCode, exp);
+  assert.strictEqual(R.perCode.reduce((s, p) => s + p.n, 0), R.tested);
   ['regeln', 'gelernt'].forEach(id => {
     const m = {};
     D.forEach(d => { const g = d.top[id][0] || '-'; if (g !== d.c) { const k = d.c + ' ' + g; (m[k] = m[k] || { exp: d.c, got: g, n: 0 }).n++; } });
@@ -247,14 +481,25 @@ test('Bericht: pro Code, Verwechslungen, Auslöser, Fehlgriffe', () => {
   assert.deepStrictEqual(R.errors, D.filter(d => !d.top.regeln.includes(d.c) || !d.top.gelernt.includes(d.c))
     .map(d => ({ i: d.i, c: d.c, regeln: d.top.regeln, gelernt: d.top.gelernt })));
 });
-test('Bericht: häufige Wörter je Code', () => {
-  const minDocs = 5, docs = {}, dfAll = {}, n = {};
-  const ok = w => w.length >= 4 && !/^\d+$/.test(w);
-  usableIdx.forEach(i => {
-    const c = cases[i].c, ws = new Set(E.norm(E.prepare(cases[i].t).text).split(' ').filter(ok));
+// erwartete Wortstatistik (unabhängig nachgerechnet): ohne Wörter direkt nach Frau/Herr/Kunde … im
+// unbereinigten Text mit ausgeschriebenen Abkürzungen (Namen)
+const CUE = new Set(['frau', 'herr', 'herrn', 'hr', 'fr', 'familie', 'fam', 'kunde', 'kundin', 'name']);
+const ABK_RE = Object.keys(ctx.ABK).sort((a, b) => b.length - a.length).map(k => [new RegExp('(^|[^\\p{L}\\p{N}])' +
+  k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}:])', /[a-zäöüß]/.test(k) ? 'giu' : 'gu'), ctx.ABK[k]]);
+const expandAbk = t => ABK_RE.reduce((s, [re, to]) => s.replace(re, (m0, pre) => pre + to), t);
+function wordStats(cs, idx) {
+  const docs = {}, dfAll = {}, n = {}, ok = w => w.length >= 4 && !/^\d+$/.test(w);
+  idx.forEach(i => {
+    const c = cs[i].c, all = E.norm(E.prepare(text(cs[i])).text).split(' '), raw = E.norm(expandAbk(text(cs[i]))).split(' ');
+    const names = new Set(raw.filter((w, k) => k && CUE.has(raw[k - 1])));
+    const ws = new Set(all.filter(w => ok(w) && !names.has(w)));
     n[c] = (n[c] || 0) + 1;
     ws.forEach(w => { docs[c + ' ' + w] = (docs[c + ' ' + w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1; });
   });
+  return { docs, dfAll, n, ok };
+}
+test('Bericht: häufige Wörter je Code', () => {
+  const minDocs = 5, { docs, dfAll, n, ok } = wordStats(cases, usableIdx);
   const codesExp = Object.keys(n).filter(c => n[c] >= minDocs).sort((a, b) => n[b] - n[a] || (a < b ? -1 : 1));
   assert.deepStrictEqual(R.words.map(x => x.code), codesExp);
   const hit = (p, w) => p.m === 'x' ? w === p.w : p.m === 'p' ? w.startsWith(p.w) : w.includes(p.w);
@@ -281,10 +526,22 @@ test('Bericht: häufige Wörter je Code', () => {
   // Füllwörter und Wörter aus der Liste der allgemeinen Wörter fehlen
   R.words.forEach(x => x.words.forEach(([w]) => assert.ok(!['kunde', 'bestellung', 'nicht', 'bitte', 'fotobuch'].includes(w), w)));
 });
+test('Wortstatistik ohne Namen', () => {
+  const code = lonely[6];
+  const named = ['Kd. Zwahlen ruft an, Lieferung fehlt', 'frau zwahlen meldet: Lieferung fehlt immer noch', 'Kundin Zwahlen wartet auf die Lieferung',
+    'Rückruf Frau Zwahlen, Lieferung verzögert', 'Fr. Bettina Zwahlen: Lieferung fehlt', 'Lieferung fehlt weiterhin.\n--\nBettina Zwahlen',
+    'Mein Glitzerkalender ist noch nicht da.\n\nFreundliche Grüsse\nBettina Zwahlen', 'Herr zwahlen fragt nach dem Glitzerkalender',
+    'Kunde zwahlen reklamiert erneut die Lieferung']
+    .map(t => ({ t, c: code }));
+  const r = evalAll(E, synth.concat(named), { minDocs: 5 }), w = r.words.find(x => x.code === code);
+  assert.ok(w && w.n === named.length, JSON.stringify(w));
+  assert.ok(!w.words.some(([x]) => /zwahlen|bettina/.test(x)), JSON.stringify(w.words));
+  assert.ok(w.words.some(([x]) => x === 'lieferung'), JSON.stringify(w.words));   // normale Wörter bleiben
+});
 E.setExamples([]);
 
 // ------------------------------------------------------------------
-// c) Geschwindigkeit
+// d) Geschwindigkeit
 // ------------------------------------------------------------------
 const vocab = base.flatMap(b => b.t.split(/\s+/)).filter(w => w.length > 3);
 function fake(n) {

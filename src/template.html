@@ -247,8 +247,11 @@
   .words .new { font-weight: 600; }
   .words .known { color: var(--faint); }
   .warn-banner { padding: 10px 14px; margin: 0 0 12px; font-size: 13.5px; color: var(--c-operations); border-color: var(--c-operations); }
-  .imp-opts { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; }
-  .imp-opts select { font: inherit; font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 1px 4px; }
+  .imp-opts { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; max-width: 100%; }
+  #impSheetBox { max-width: 100%; flex-wrap: wrap; }
+  #impSheet { max-width: 100%; }
+  .imp-opts .check { max-width: 100%; flex-wrap: wrap; }
+  .imp-opts select { max-width: 100%; min-width: 0; font: inherit; font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 1px 4px; }
   .scroll-hint { display: none; font-size: 12px; color: var(--faint); margin: 6px 0 0; }
   @media (max-width: 560px) { .scroll-hint { display: block; } }
   .verdict { font-size: 13.5px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); margin: 8px 0; }
@@ -722,7 +725,7 @@
     $("impMap").hidden = false;
     $("impFileInfo").textContent = info + " · " + fmt(rows.length) + " Zeilen, " + rows[0].length + " Spalten";
     var opts = '<option value="-1">keiner Zeile (keine Spaltennamen)</option>';
-    for (var k = 0; k < Math.min(15, rows.length); k++) opts += '<option value="' + k + '">Zeile ' + lineNo(k) + ": " + esc(snippet(rows[k].filter(function (x) { return String(x).trim(); }).join(" · "), 50)) + "</option>";
+    for (var k = 0; k < Math.min(15, rows.length); k++) opts += '<option value="' + k + '">Zeile ' + lineNo(k) + ": " + esc(snippet(rows[k].filter(function (x) { return String(x).trim(); }).join(" · "), 34)) + "</option>";
     $("impHeaderRow").innerHTML = opts;
     $("impHeaderRow").value = String(imp.cfg.headerRow);
     $("impFill").checked = !!imp.cfg.fillDown;

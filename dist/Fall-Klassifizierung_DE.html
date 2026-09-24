@@ -22,6 +22,8 @@
     --c-finance: #1a7f37;
     --c-product: #0969da;
     --radius: 10px;
+    --danger: #cf222e;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -40,7 +42,10 @@
       --c-operations: #f0883e;
       --c-finance: #56d364;
       --c-product: #58a6ff;
+      --danger: #ff7b72;
+      color-scheme: dark;
     }
+    .btn.primary { background: #1f6feb; border-color: #1f6feb; }
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -194,14 +199,14 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 6px 12px;
   }
   .btn:hover { border-color: var(--accent); color: var(--accent); }
-  .btn.danger:hover { border-color: #cf222e; color: #cf222e; }
+  .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
   .litem { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--border); }
   .litem:first-child { border-top: 0; }
   .litem code { font: 600 13px ui-monospace, Menlo, Consolas, monospace; color: var(--accent); }
   .litem .lt { font-size: 13px; }
   .litem .ls { grid-column: 2; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
   .litem .del { border: 0; background: transparent; color: var(--faint); font-size: 18px; cursor: pointer; line-height: 1; padding: 0 4px; }
-  .litem .del:hover { color: #cf222e; }
+  .litem .del:hover { color: var(--danger); }
   .toast button { margin-left: 10px; font: inherit; font-weight: 700; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 6px; padding: 1px 8px; cursor: pointer; }
   .toast.show.action { pointer-events: auto; }
 
@@ -211,7 +216,7 @@
   .btn:disabled { opacity: .5; cursor: default; }
   .imp-paste textarea { min-height: 110px; font-size: 13px; padding: 10px; }
   .imp-paste .btnrow { margin-top: 8px; }
-  .imp-err { font-size: 13px; color: #cf222e; margin: 0 0 10px; }
+  .imp-err { font-size: 13px; color: var(--danger); margin: 0 0 10px; }
   .imp-file { font-size: 13px; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
   .scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; margin: 6px 0 10px; }
   table.tbl { border-collapse: collapse; width: 100%; font-size: 12.5px; }
@@ -233,13 +238,28 @@
   .ev details { margin: 8px 0; }
   .ev details > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); padding: 4px 0; }
   .ev .ok { color: var(--ok); font-weight: 600; }
-  .ev .bad { color: #cf222e; }
+  .ev .faint { color: var(--faint); font-weight: 400; }
+  .ev .bad { color: var(--danger); }
   .errcase { border-top: 1px solid var(--border); padding: 8px 0; font-size: 13px; }
   .errcase .et { color: var(--muted); font-style: italic; overflow-wrap: anywhere; margin-top: 3px; }
   .errcase .btn { font-size: 12px; padding: 2px 8px; margin-left: 6px; }
   .words { font-size: 12.5px; line-height: 1.7; }
   .words .new { font-weight: 600; }
   .words .known { color: var(--faint); }
+  .warn-banner { padding: 10px 14px; margin: 0 0 12px; font-size: 13.5px; color: var(--c-operations); border-color: var(--c-operations); }
+  .imp-opts { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; max-width: 100%; }
+  #impSheetBox { max-width: 100%; flex-wrap: wrap; }
+  #impSheet { max-width: 100%; }
+  .imp-opts .check { max-width: 100%; flex-wrap: wrap; }
+  .imp-opts select { max-width: 100%; min-width: 0; font: inherit; font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 1px 4px; }
+  .scroll-hint { display: none; font-size: 12px; color: var(--faint); margin: 6px 0 0; }
+  @media (max-width: 560px) { .scroll-hint { display: block; } }
+  .verdict { font-size: 13.5px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); margin: 8px 0; }
+  .verdict.good { border-color: var(--ok); }
+  .verdict.bad { border-color: var(--danger); }
+  .tag-imp { font-size: 11px; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+  .words .wx { font: inherit; font-size: 12.5px; background: transparent; border: 0; padding: 0; color: inherit; cursor: pointer; text-decoration: none; }
+  .words .wx.off { text-decoration: line-through; color: var(--faint); font-weight: 400; }
   pre.report { font: 11.5px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
@@ -252,6 +272,8 @@
     </div>
     <span class="badge" id="badge"></span>
   </header>
+
+  <p class="card warn-banner" id="storageWarn" hidden>Gelernte Fälle können in diesem Browser nicht (mehr) gespeichert werden – der Browser erlaubt es nicht oder der Speicher ist voll. Neu gelernte Fälle gehen beim Schliessen verloren. Abhilfe: unter „Gelernte Fälle“ importierte Fälle löschen oder exportieren.</p>
 
   <section class="card input-card">
     <label for="q">Problem des Kunden</label>
@@ -287,8 +309,7 @@
   <details class="card learned" id="learnedBox">
     <summary><span>Gelernte Fälle <span class="count" id="learnedCount"></span></span></summary>
     <div class="learned-body">
-      <p class="note">Wenn Text im Feld steht und du einen Code kopierst (Vorschlag, Suche oder Liste), merkt sich das Tool diesen Fall. Ähnliche Texte bekommen danach diesen Code vorgeschlagen. Gespeichert wird nur der bereinigte Text (ohne Anrede, Signatur, E-Mail-Adressen, Telefonnummern und Nummern) – nur in diesem Browser.</p>
-      <p class="warn" id="storageWarn" hidden>Gelernte Fälle können hier nicht (mehr) dauerhaft gespeichert werden – der Browser erlaubt es nicht oder der Speicher ist voll. Neue Fälle gehen beim Schliessen verloren. Bitte exportieren oder importierte Fälle löschen.</p>
+      <p class="note">Wenn Text im Feld steht und du einen Code kopierst (Vorschlag, Suche oder Liste), merkt sich das Tool diesen Fall. Ähnliche Texte bekommen danach diesen Code vorgeschlagen. Gespeichert wird nur der bereinigte Text (ohne Anrede, Signatur, E-Mail-Adressen, Telefon-, Konto- und andere Nummern) – nur in diesem Browser. „Exportieren“ speichert nur die von Hand gelernten Fälle, nicht die importierten.</p>
       <div class="btnrow">
         <button class="btn" type="button" id="btnExport">Exportieren</button>
         <button class="btn" type="button" id="btnImport">Importieren</button>
@@ -303,7 +324,7 @@
   <details class="card learned" id="impBox">
     <summary><span>Fälle importieren und testen</span></summary>
     <div class="learned-body">
-      <p class="note">Frühere Fälle aus Excel oder CSV laden: eine Spalte mit dem Text (Notiz oder Kundennachricht) und eine Spalte mit der Klassifizierung. Damit kann das Tool <b>seine Genauigkeit an echten Fällen messen</b> und die Fälle <b>auf einmal lernen</b>. Alles passiert in diesem Browser – es wird nichts gesendet.</p>
+      <p class="note">Frühere, erledigte Fälle aus Excel oder CSV laden (z.B. ein Export aus dem CRM): eine Spalte mit dem Text (Notiz oder Kundennachricht) und eine Spalte mit der Klassifizierung. Damit kann das Tool <b>seine Genauigkeit an echten Fällen messen</b> und die Fälle <b>auf einmal lernen</b>. Am besten mindestens 200 Fälle, mit mehreren Fällen pro Klassifizierung. Alles passiert in diesem Browser – es wird nichts gesendet.</p>
       <div class="btnrow">
         <button class="btn" type="button" id="btnImpFile">Datei wählen (.xlsx, .csv)</button>
         <button class="btn" type="button" id="btnImpPaste">Aus Excel einfügen</button>
@@ -313,13 +334,19 @@
         <textarea id="impPaste" spellcheck="false" placeholder="In Excel die Spalten mit Text und Klassifizierung markieren (mit Überschriften), kopieren (Ctrl+C) und hier einfügen (Ctrl+V)"></textarea>
         <div class="btnrow"><button class="btn" type="button" id="btnImpPasteOk">Eingefügte Zeilen übernehmen</button></div>
       </div>
+      <label class="check" id="impSheetBox" hidden>Blatt: <select id="impSheet"></select></label>
       <p class="imp-err" id="impErr" hidden></p>
       <div id="impMap" hidden>
         <p class="imp-file" id="impFileInfo"></p>
-        <label class="check"><input type="checkbox" id="impHeader"> Erste Zeile enthält Spaltennamen</label>
-        <p class="note">Für jede Spalte wählen: <b>Text</b> (auch mehrere, z.B. Betreff und Beschreibung) und genau eine Spalte <b>Klassifizierung</b> (Code, z.B. 50410, oder Bezeichnung).</p>
+        <div class="imp-opts">
+          <label class="check">Spaltennamen in: <select id="impHeaderRow"></select></label>
+          <label class="check"><input type="checkbox" id="impFill"> Leere Klassifizierung = Wert der Zeile darüber (gruppierte Berichte)</label>
+        </div>
+        <p class="note">Für jede Spalte wählen: <b>Text</b> (auch mehrere, z.B. Betreff und Beschreibung) und genau eine Spalte <b>Klassifizierung</b> (Code, z.B. 50410, oder Bezeichnung). Spalten mit Namen, E-Mail-Adressen oder Nummern nicht als Text wählen.</p>
+        <p class="scroll-hint">Tabelle seitlich verschiebbar ↔</p>
         <div class="scroll"><table class="tbl preview" id="impPreview"></table></div>
         <div class="imp-sum" id="impSum"></div>
+        <p class="warn" id="impWarn" hidden></p>
         <div class="btnrow">
           <button class="btn primary" type="button" id="btnEval" disabled>Genauigkeit testen</button>
           <button class="btn" type="button" id="btnLearnAll" disabled>Alle als gelernte Fälle übernehmen</button>
@@ -846,7 +873,12 @@ var Engine = (function () {
     "betreff ifolor tag tage woche wochen monat ihnen ihrer ihres " +
     "bekommen bekommt bekam erhalten erhalt erhielt gekriegt gehen machen macht gemacht sagen sagt gesagt sehen sieht " +
     "gesehen kommen kommt gekommen geben gegeben nehmen nimmt stellen stellt finden findet gefunden brauchen braucht brauche " +
-    "benoetigt benoetige senden gesendet schicken geschickt schickt");
+    "benoetigt benoetige senden gesendet schicken geschickt schickt " +
+    // Anhang-Hinweise und Grussformeln (sonst gelten z.B. "Siehe Anhang" oder Grüsse als Inhalt)
+    "siehe anhang anbei beilage beigefuegt iphone freundliche freundlichen gruesse gruessen gruss");
+
+  // Nach diesen Wörtern folgt meist ein Name (zählt nicht für die Wortstatistik)
+  var NAMECUE = set("frau herr herrn hr fr familie fam kunde kundin name");
 
   // Wörter, die zeigen, dass ein Satz das eigentliche Anliegen beschreibt
   var SIGNAL = set("leider aber jedoch trotzdem obwohl problem probleme reklamation reklamieren beanstandung fehler fehlerhaft " +
@@ -861,6 +893,8 @@ var Engine = (function () {
   var MAX_RESULTS = 3;   // Anzahl Vorschläge
   var EX_WEIGHT = 40;    // Gewicht gelernter Fälle (bei Ähnlichkeit 100 %)
   var EX_MIN = 0.2;      // darunter zählt ein gelernter Fall nicht
+  var LEARN_MAX = 1000;  // so viele Zeichen des bereinigten Textes werden gelernt
+  var NEAR = 0.9;        // ab dieser Ähnlichkeit gilt ein Fall als fast gleicher Text (Auswertung)
 
   function modeFor(w, mod) {
     if (mod === "=") return "x";          // exaktes Wort
@@ -880,6 +914,16 @@ var Engine = (function () {
   }
 
   var groups = {}, classes = [], byCode = {}, idf = {}, errors = [], abk = [], nLit = 0, nPart = 0;
+  var vocab = Object.create(null), vocabLong = [];
+
+  // Bekanntes Wort (Regeln, Füllwörter …), auch gebeugt oder als Anfang eines zusammengesetzten Wortes
+  function isVocab(tok) {
+    var n = norm(tok);
+    if (!n) return false;
+    if (vocab[n] || vocab[stem(n)]) return true;
+    for (var i = 0; i < vocabLong.length; i++) if (n.indexOf(vocabLong[i]) === 0) return true;
+    return false;
+  }
 
   function build(SYN, TEXT, ALT, ABK, BASE) {
     groups = {}; classes = []; byCode = {}; idf = {}; errors = []; abk = [];
@@ -943,18 +987,27 @@ var Engine = (function () {
     var N = classes.length;
     Object.keys(df).forEach(function (k) { idf[k] = Math.log(1 + N / df[k]); });
 
-    // Literale und Wortteile durchnummerieren (Zwischenspeicher je Text als Array)
+    // Literale und Wortteile durchnummerieren (Zwischenspeicher je Text als Array).
+    // Ein Literal ist durch seine Wortteile samt Modus bestimmt: "paket" als Regel (irgendwo
+    // im Wort) und als Bezeichnung (Wortanfang) sind zwei verschiedene Literale.
     var litIds = Object.create(null), partIds = Object.create(null);
-    nLit = 0; nPart = 0;
+    nLit = 0; nPart = 0; vocab = Object.create(null); vocabLong = [];
+    function addV(w) { if (w && !vocab[w]) { vocab[w] = 1; if (w.length >= 5) vocabLong.push(w); } }
     classes.forEach(function (c) { c.rules.forEach(function (r) { r.terms.concat(r.neg).forEach(function (t) {
       t.matchers.forEach(function (l) {
-        l.id = litIds[l.key] !== undefined ? litIds[l.key] : (litIds[l.key] = nLit++);
+        var lk = l.parts.map(function (p) { return p.m + ":" + p.w; }).join(" ");
+        l.id = litIds[lk] !== undefined ? litIds[lk] : (litIds[lk] = nLit++);
         l.parts.forEach(function (p) {
           var k = p.m + ":" + p.w;
           p.id = partIds[k] !== undefined ? partIds[k] : (partIds[k] = nPart++);
+          addV(p.w);
         });
       });
     }); }); });
+    // Wortschatz (Regeln, Gruppen, Abkürzungen, Füllwörter): ein Fachwort nach "Frau X" ist kein Name
+    Object.keys(groups).forEach(function (g) { groups[g].forEach(function (l) { l.parts.forEach(function (p) { addV(p.w); }); }); });
+    [STOP, FILL, SIMSTOP, SIGNAL].forEach(function (o) { Object.keys(o).forEach(addV); });
+    if (ABK) Object.keys(ABK).forEach(function (k) { norm(ABK[k]).split(" ").forEach(addV); });
 
     // Abkürzungen: nur Grossbuchstaben = Gross-/Kleinschreibung beachten
     if (ABK) Object.keys(ABK).sort(function (a, b) { return b.length - a.length; }).forEach(function (k) {
@@ -975,8 +1028,20 @@ var Engine = (function () {
   var HEAD = /^\s*(von|from|de|gesendet|sent|envoy[ée]|datum|date|an|to|à|cc|bcc|betreff|subject|objet)\s*:(.*)$/i;
   var FIELD = /^\s*(name|vorname|nachname|e-?mail|telefon|tel\.?|mobile?|handy|natel|adresse|strasse|straße|plz|ort|plz\s*\/\s*ort|land|kundennummer|kunden-?nr\.?|bestellnummer|bestell-?nr\.?|auftragsnummer|auftrags-?nr\.?|firma|unternehmen)\s*:/i;
   var CLOSE_LINE = /^\s*(?:(?:mit\s+)?(?:freundliche[nrm]?|beste[n]?|liebe[n]?|herzliche[n]?|viele[n]?|sch(?:ö|oe)ne[n]?|sonnige[n]?|nette[n]?)\s+gr(?:ü|ue|u)(?:ss|ß)(?:e|en)?|gr(?:ü|ue|u)(?:ss|ß)(?:e|en|li)?|mfg|lg|vg|bg|beste\s+w(?:ü|ue)nsche|cordialement|meilleures\s+salutations|salutations|bien\s+(?:à|a)\s+vous|best\s+regards|kind\s+regards|regards)(?![\p{L}])/iu;
-  var THANKS_LINE = /^\s*(?:(?:vielen|herzlichen|besten|tausend)\s+dank|danke(?:\s+(?:sch(?:ö|oe)n|vielmals|im\s+voraus|und\s+gr(?:ü|ue|u)(?:ss|ß)e?))?|merci(?:\s+beaucoup)?)\s*[!.,]*\s*$/i;
-  var GREET = /^\s*(?:guten\s+(?:tag|morgen|abend|nachmittag)|gr(?:ü|ue|u)e?zi(?:\s+mit(?:e|ei)nand)?|hallo|hoi|hey|sal(?:ü|u)|servus|moin|sehr\s+geehrte[rsn]?|geehrte[rsn]?|liebe[rsn]?|gesch(?:ä|ae)tzte[rsn]?|bonjour|bonsoir)(?![\p{L}])(?:\s+(?:zusammen|miteinander|mitenand|damen|und|herren|frau|herr|liebes?|ifolor|ifolor-team|team|kundenservice|kundendienst|service|support)(?![\p{L}-])){0,5}/iu;
+  // Dank, auch "Vielen Dank und liebe Grüsse" / "Danke und LG" (Gruppe 1 = Grussformel)
+  var THANKS_HEAD = new RegExp("^\\s*(?:(?:vielen|herzlichen|besten|tausend)\\s+dank|danke(?:\\s+(?:sch(?:ö|oe)n|vielmals))?|merci(?:\\s+beaucoup)?)" +
+    "(?:\\s+im\\s+voraus)?(?:[\\s,.!]*(?:und|&)\\s+((?:(?:mit\\s+)?(?:freundliche[nrm]?|beste[n]?|liebe[n]?|herzliche[n]?|viele[n]?|sch(?:ö|oe)ne[n]?|sonnige[n]?|nette[n]?)\\s+)?" +
+    "gr(?:ü|ue|u)(?:ss|ß)(?:e|en|li)?|mfg|lg|vg|bg))?(?![\\p{L}])", "iu");
+  var THANKS_LINE = new RegExp(THANKS_HEAD.source + "\\s*[!.,]*\\s*$", "iu");
+  // nach einer Grussformel: bis zu 2 Wörter mit Grossbuchstaben (Name) auf derselben Zeile
+  var NAME_REST = /^[\s,]*([A-ZÄÖÜ][\p{L}'’-]*)\.?(?:[ \t]+([A-ZÄÖÜ][\p{L}'’-]*)\.?)?[\s,.!]*$/u;
+  // Signatur-Trenner "-- " und Fusszeilen von Mailprogrammen/Geräten
+  var SIG_DASH = /^[ \t]*--[ \t]*$/;
+  var W4 = "[\\p{L}\\p{N}.'’&-]+(?:[ \\t]+[\\p{L}\\p{N}.'’&-]+){0,3}";
+  var DEVICE = new RegExp("^\\s*(?:von\\s+meine[mr]?\\s+" + W4 + "\\s+gesendet|gesendet\\s+(?:von|mit|über|ueber)\\s+meine[mr]?\\s+" + W4 +
+    "|von\\s+outlook\\s+f(?:ü|ue)r\\s+" + W4 + "\\s+gesendet|holen\\s+sie\\s+sich\\s+outlook\\s+f(?:ü|ue)r\\s+" + W4 +
+    "|sent\\s+from\\s+my\\s+" + W4 + "|get\\s+outlook\\s+for\\s+" + W4 + "|envoy(?:é|e)\\s+(?:de|depuis)\\s+mon\\s+" + W4 + ")\\s*[.!]?\\s*$", "iu");
+  var GREET = /^\s*(?:guten\s+(?:tag|morgen|abend|nachmittag)|gr(?:ü|ue|u)e?zi(?:\s+mit(?:e|ei)nand)?|gr(?:ü|ue|u)(?:ss|ß)\s+gott|hallo|hoi|hey|sal(?:ü|u)|servus|moin|sehr\s+geehrte[rsn]?|geehrte[rsn]?|liebe[rsn]?|gesch(?:ä|ae)tzte[rsn]?|bonjour|bonsoir)(?![\p{L}])(?:\s+(?:zusammen|miteinander|mitenand|damen|und|herren|frau|herr|liebes?|ifolor|ifolor-team|team|kundenservice|kundendienst|service|support)(?![\p{L}-])){0,5}/iu;
   var INLINE_CLOSE = /(?:^|[\s.!?,;])((?:mit\s+)?(?:freundliche[nrm]?|beste[n]?|liebe[n]?|herzliche[n]?|viele[n]?)\s+gr(?:ü|ue|u)(?:ss|ß)(?:e|en)?|(?:danke\s+und\s+)?gr(?:ü|ue|u)(?:ss|ß)e?|mfg)(?![\p{L}])[\s\S]{0,160}$/iu;
   var INLINE_THANKS = /(?:^|[.!?]\s*)((?:vielen|besten|herzlichen)\s+dank|danke(?:\s+(?:sch(?:ö|oe)n|vielmals))?|merci)\s*[.!]?[^.!?]{0,40}$/i;
   var POLITE = [
@@ -992,6 +1057,26 @@ var Engine = (function () {
   ];
 
   function words(s) { return (String(s).match(/[\p{L}\p{N}]+/gu) || []).length; }
+  // Zeile wie aus einer Signatur: kein Wort mit Kleinbuchstaben am Anfang (Name, Adresse, Telefon …)
+  function sigLike(s) {
+    s = String(s).replace(/\S+@\S+|(?:https?:\/\/|www\.)\S+/gi, " ")
+      .replace(/(^|[^\p{L}\p{N}])(?:von|van|de|der|den|di|da|du|zu|la|le|del|dos|und|y|c\/o)(?![\p{L}\p{N}])/gu, "$1");
+    return !/(?:^|[^\p{L}\p{N}])[a-zäöüß]/u.test(s);
+  }
+  // Grussformel-Zeile, vor der noch fast kein Text steht: nur Grussformel (evtl. mit Name) ->
+  // ab hier Signatur. Reiner Dank ("Danke!") nur, wenn danach bloss noch Signaturzeilen kommen.
+  function closeOnly(out, i) {
+    var l = out[i], m = CLOSE_LINE.exec(l), th = THANKS_HEAD.exec(l);
+    if (/^\s*gr(?:ü|ue|u)(?:ss|ß)\s+gott(?![\p{L}])/iu.test(l)) return false;   // Anrede, keine Grussformel
+    if (!m && th && !th[1]) return THANKS_LINE.test(l) && out.slice(i + 1).every(sigLike);
+    if (!m) m = th;
+    if (!m) return false;
+    var rest = l.slice(m[0].length), n;
+    if (/^[\s,.!]*$/.test(rest)) return true;
+    // Name nach der Grussformel; "LG Fotobuch kaputt" oder "VG Rechnung" bleiben (bekannte Wörter)
+    n = NAME_REST.exec(rest);
+    return !!n && !isVocab(n[1]) && !(n[2] && isVocab(n[2]));
+  }
 
   function clean(raw) {
     var removed = {}, t = String(raw || "").replace(/\r\n?/g, "\n");
@@ -999,6 +1084,8 @@ var Engine = (function () {
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (/^\s*>/.test(line)) { removed["zitierte E-Mails"] = 1; continue; }
+      if (SIG_DASH.test(line)) { removed["Grussformel/Signatur"] = 1; break; }
+      if (DEVICE.test(line)) { removed["Grussformel/Signatur"] = 1; continue; }
       var h = HEAD.exec(line);
       if (h) {
         var key = h[1].toLowerCase();
@@ -1010,14 +1097,20 @@ var Engine = (function () {
       }
       if (bodyW >= 6 && (/^\s*(?:-{2,}|_{4,}).*(?:original|urspr(?:ü|ue)ngliche|weitergeleitet|forwarded|message|nachricht)/i.test(line) ||
           /^\s*(?:am|on|le)\s.{3,140}(?:schrieb|wrote|a\s+écrit)/i.test(line))) { removed["zitierte E-Mails"] = 1; break; }
-      if (FIELD.test(line)) { removed["Kontaktdaten"] = 1; continue; }
+      var fm = FIELD.exec(line);
+      if (fm) {
+        // Formularfeld: kurzer Wert, Ziffern, @ oder Name -> weg; sonst ist es eine Notiz (ohne Bezeichnung behalten)
+        var val = line.slice(fm[0].length);
+        if (words(val) <= 4 || /[\d@]/.test(val) || sigLike(val)) { removed["Kontaktdaten"] = 1; continue; }
+        line = val;
+      }
       out.push(line);
       bodyW += words(line);
     }
     // Grussformel und Signatur (ab der Grusszeile alles weg)
-    var w = 0;
+    var w = 0, th;
     for (i = 0; i < out.length; i++) {
-      if (w >= 3 && (CLOSE_LINE.test(out[i]) || THANKS_LINE.test(out[i]))) {
+      if (w >= 3 ? (CLOSE_LINE.test(out[i]) || THANKS_LINE.test(out[i]) || ((th = THANKS_HEAD.exec(out[i])) && th[1])) : closeOnly(out, i)) {
         out = out.slice(0, i); removed["Grussformel/Signatur"] = 1; break;
       }
       w += words(out[i]);
@@ -1044,16 +1137,36 @@ var Engine = (function () {
     });
     // Kontaktdaten und Nummern
     function strip(re, what) { var n = t.replace(re, " "); if (n !== t) { removed[what] = 1; t = n; } }
-    strip(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "E-Mail-Adressen");
+    strip(/[\w.+-]{1,64}@[\w-]+\.[\w.-]+/g, "E-Mail-Adressen");   // {1,64}: sonst sehr langsam bei langen Wörtern
     strip(/(?:https?:\/\/|www\.)\S+/gi, "Links");
+    // IBAN (mit/ohne Leerzeichen, alle Länder) und Kartennummern in 4er-Gruppen
+    strip(/\b[A-Za-z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g, "Konto-/Kartennummern");
+    strip(/\b\d{4}([ -])\d{4}\1\d{4}\1\d{1,4}\b/g, "Konto-/Kartennummern");
+    strip(/(?:\+|00)\s?\d{2,3}\s?\(0\)\s?\d{1,3}[\d\s\/.-]{4,}\d/g, "Telefonnummern");   // +41 (0)44 …
     strip(/(?:\+|00)\s?\d{2}[\d\s\/.-]{7,}\d/g, "Telefonnummern");
-    strip(/(^|\s)0\d{2}[\s\/.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}(?=\s|$|[.,;])/g, "Telefonnummern");
+    strip(/(^|[\s.:(\/])0\d{2}[\s\/.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}(?=\s|$|[.,;)])/g, "Telefonnummern");
     strip(/(^|\s)\d{1,2}\.\s?\d{1,2}\.(?:\s?\d{2,4})?/g, "Daten/Nummern");
     strip(/(^|\s)\d{1,2}\.?\s+(?:januar|jänner|februar|m(?:ä|ae)rz|april|mai|juni|juli|august|september|oktober|november|dezember)(?:\s+\d{4})?(?![\p{L}])/giu, "Daten/Nummern");
+    // Referenznummern mit Buchstaben (A-938794, RE-2026/48213, #123456): Nummer weg, Kürzel bleibt ("RE" = Rechnung)
+    var n0 = t;
+    t = t.replace(/(\p{L}{0,30})([-#\/.:]?)(\d[\d\/.-]*\d)(?![\p{L}\p{N}])/gu, function (m0, pre, sep, num) {
+      return (pre || sep) && num.replace(/\D/g, "").length >= 5 ? pre + " " : m0;
+    });
+    if (t !== n0) removed["Daten/Nummern"] = 1;
     strip(/\d[\d.\-\/]{6,}\d/g, "Daten/Nummern");
     strip(/(^|\s)\d{5,}(?=\s|$|[.,;:)])/g, "Daten/Nummern");
     strip(/(^|\s)\d{4}\s+[A-ZÄÖÜ][\p{L}-]+/gu, "Adressen");
-    strip(/(^|\s)[\p{L}-]*(?:strasse|straße|weg|gasse|platz|allee)\s+\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen");
+    strip(/(^|\s)[\p{L}-]*(?:strasse|straße|str\.?|weg|gasse|platz|pl\.|allee)\s*\d+[a-z]?(?=\s|$|[.,;])/giu, "Adressen");
+    // Namen nach einer Anrede (Frau Müller, Hr. Hans Meier): Anrede bleibt, bis zu 2 Namen weg,
+    // ein bekanntes Wort als 2. Wort bleibt ("Frau Meier Rechnung doppelt")
+    n0 = t;
+    t = t.replace(/(^|[^\p{L}\p{N}])((?:Frau|Herrn?|Familie)[ \t]+|(?:Hr|Fr|Fam)\.[ \t]*)([A-ZÄÖÜ][\p{L}'’-]*\.?)(?:[ \t]+([A-ZÄÖÜ][\p{L}'’-]*))?/gu,
+      function (m0, pre, title, n1, n2, at, str) {
+        // "Mo-Fr." / "bis Fr.": Freitag, keine Anrede
+        if (title.indexOf("Fr.") === 0 && (/^[-–]$/.test(pre) || /bis\s*$/i.test(str.slice(Math.max(0, at - 5), at + pre.length)))) return m0;
+        return pre + title + (n2 && isVocab(n2) ? n2 : "");
+      });
+    if (t !== n0) removed["Namen"] = 1;
     t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
     return { text: t, removed: Object.keys(removed) };
   }
@@ -1453,18 +1566,22 @@ var Engine = (function () {
     var p = prepare(raw);
     return Object.keys(simToks(tokenize(p.text))).length >= 2 ? p.cleaned : "";
   }
+  // Text, der gelernt (gespeichert) wird: bereinigt, höchstens LEARN_MAX Zeichen, "" = nicht lernbar
+  function learnText(raw) { return learnable(raw).slice(0, LEARN_MAX); }
 
   // ------------------------------------------------------------------
   // Auswertung mit früheren Fällen (lokal, in Etappen)
   // ------------------------------------------------------------------
+  // strict: ähnliche Fälle ab NEAR (fast gleicher Text) zählen nicht
   var VARIANTS = [
-    { id: "regeln", name: "Nur Stichwörter (ohne gelernte Fälle)", rules: true, learned: false },
-    { id: "gelernt", name: "Stichwörter + importierte Fälle (aktuelle Einstellung)", rules: true, agg: "max", w: EX_WEIGHT },
-    { id: "max20", name: "Stichwörter + importierte Fälle, Gewicht 20", rules: true, agg: "max", w: 20 },
-    { id: "max80", name: "Stichwörter + importierte Fälle, Gewicht 80", rules: true, agg: "max", w: 80 },
-    { id: "top3_20", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 20", rules: true, agg: "top3", w: 20 },
-    { id: "top3_40", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 40", rules: true, agg: "top3", w: 40 },
-    { id: "top3_80", name: "Stichwörter + mehrere ähnliche Fälle, Gewicht 80", rules: true, agg: "top3", w: 80 },
+    { id: "regeln", name: "Nur Stichwörter (so wie heute)", rules: true, learned: false },
+    { id: "gelernt", name: "Mit importierten Fällen", rules: true, agg: "max", w: EX_WEIGHT },
+    { id: "gelernt_streng", name: "Mit importierten Fällen, ohne fast gleiche Texte", rules: true, agg: "max", w: EX_WEIGHT, strict: true },
+    { id: "max20", name: "Mit Fällen, Gewicht 20", rules: true, agg: "max", w: 20 },
+    { id: "max80", name: "Mit Fällen, Gewicht 80", rules: true, agg: "max", w: 80 },
+    { id: "top3_20", name: "Mit Fällen, mehrere ähnliche, Gewicht 20", rules: true, agg: "top3", w: 20 },
+    { id: "top3_40", name: "Mit Fällen, mehrere ähnliche, Gewicht 40", rules: true, agg: "top3", w: 40 },
+    { id: "top3_80", name: "Mit Fällen, mehrere ähnliche, Gewicht 80", rules: true, agg: "top3", w: 80 },
     { id: "nurfaelle", name: "Nur importierte Fälle (ohne Stichwörter)", rules: false, agg: "max", w: EX_WEIGHT }
   ];
 
@@ -1490,17 +1607,21 @@ var Engine = (function () {
     return out;
   }
 
-  // Misst die Genauigkeit mit früheren Fällen [{t: Text, c: Code}]: jeder Fall wird
-  // wie ein neuer Fall getestet (er selbst und Fälle mit gleichem Text zählen nicht).
-  // Die gelernten Fälle des Tools werden weder benutzt noch verändert.
+  // Misst die Genauigkeit mit früheren Fällen [{t: Text, c: Code}]: jeder Fall wird wie ein
+  // neuer Fall getestet (vollständiger Text). Als ähnliche Fälle dienen die anderen Fälle so, wie
+  // das Tool sie lernen würde (learnText); der Fall selbst, Fälle mit gleichem Text und eingebaute
+  // Beispiele mit gleichem Text zählen nicht. Kurze Notizen werden getestet, auch wenn sie zu kurz
+  // zum Lernen sind. Die gelernten Fälle des Tools werden weder benutzt noch verändert.
+  // Näherung: die Wortgewichte (IDF) zählen alle Fälle mit (Abweichung zum exakten Test ~1 %).
   // opts: {maxTests: 3000, minDocs: 5, details: false}
   // Rückgabe: {step(ms) -> fertig?, progress() -> {phase, done, total}, result() -> Bericht}
   function evaluation(cases, opts) {
     cases = cases || []; opts = opts || {};
     var maxTests = opts.maxTests || 3000, minDocs = opts.minDocs || 5;
-    var phase = "prepare", at = 0, usable = [], skipped = { unbekannterCode: 0, zuWenigText: 0 };
+    var phase = "prepare", at = 0, usable = [], skipped = { unbekannterCode: 0, leer: 0 };
+    var zuKurz = 0, sameText = 0, nearDup = 0, keyN = Object.create(null);
     var codeN = {}, codeWords = {}, dfAll = Object.create(null);
-    var baseItems = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true }; });
+    var baseItems = baseExamples.map(function (e) { return { t: e.t, c: e.c, base: true, key: norm(prepare(e.t).cleaned) }; });
     var baseIdx = makeIndex(baseItems), evalIdx = null, tests = [], every = 1;
     var stats = {}, perCode = {}, conf = { regeln: {}, gelernt: {} }, trig = {}, errors = [];
     var details = opts.details ? [] : null, wordCodes = [], wordsOut = [], report = null;
@@ -1510,20 +1631,33 @@ var Engine = (function () {
     function prepOne(i) {
       var x = cases[i] || {}, c = String(x.c == null ? "" : x.c).trim(), t = String(x.t == null ? "" : x.t);
       if (!hasCode(c)) { skipped.unbekannterCode++; return; }
-      var a = analyze(t), st = Object.keys(queryStems(a));
-      if (st.length < 2) { skipped.zuWenigText++; return; }
-      usable.push({ i: i, t: t, c: c, key: norm(a.prep.cleaned), st: st });
+      var a = analyze(t);
+      if (!words(a.prep.cleaned)) { skipped.leer++; return; }
+      var u = { i: i, t: t, c: c, key: norm(a.prep.cleaned) };
+      // wie learnText(t): gespeicherter Text, daraus die Stämme wie im Index des Tools
+      if (Object.keys(queryStems(a)).length >= 2) {
+        var lp = prepare(a.prep.cleaned.slice(0, LEARN_MAX)), lk = norm(lp.cleaned);
+        u.st = Object.keys(simToks(tokenize(lp.text)));
+        if (lk !== u.key) u.lkey = lk;
+      } else zuKurz++;
+      usable.push(u);
+      keyN[u.key] = (keyN[u.key] || 0) + 1;
       codeN[c] = (codeN[c] || 0) + 1;
+      // Wörter direkt nach Frau/Herr/Kunde … sind wohl Namen ("Frau Muster", "Kd. Muster"); aus dem
+      // unbereinigten Text bestimmt, weil die Bereinigung Namen nach einer Anrede schon entfernt
       var cw = codeWords[c] || (codeWords[c] = Object.create(null)), seen = Object.create(null);
+      var rw = norm(expand(t).text).split(" "), names = Object.create(null);
+      for (var k = 1; k < rw.length; k++) if (NAMECUE[rw[k - 1]]) names[rw[k]] = 1;
       a.words.forEach(function (w) {
-        if (seen[w] || w.length < 4 || /^\d+$/.test(w) || FILL[w] || SIMSTOP[w] || STOP[w]) return;
+        if (seen[w] || w.length < 4 || /^\d+$/.test(w) || FILL[w] || SIMSTOP[w] || STOP[w] || names[w]) return;
         seen[w] = 1; cw[w] = (cw[w] || 0) + 1; dfAll[w] = (dfAll[w] || 0) + 1;
       });
     }
     function startTest() {
-      evalIdx = makeIndex(baseItems.concat(usable.map(function (u) {
-        return { t: u.t, c: u.c, base: false, i: u.i, key: u.key, st: u.st };
+      evalIdx = makeIndex(baseItems.concat(usable.filter(function (u) { return u.st; }).map(function (u) {
+        return { c: u.c, base: false, i: u.i, key: u.key, st: u.st };
       })));
+      usable.forEach(function (u) { if (keyN[u.key] > 1) sameText++; });
       every = usable.length > maxTests ? Math.ceil(usable.length / maxTests) : 1;
       for (var j = 0; j < usable.length; j += every) tests.push(usable[j]);
       phase = "test"; at = 0;
@@ -1532,12 +1666,16 @@ var Engine = (function () {
 
     // 2. Einen Fall mit allen Varianten testen
     function testOne(u) {
-      var a = analyze(u.t), rules = scoreRules(a, { debug: true });
-      var sims = similar(a, evalIdx, { exclude: function (e) { return !e.base && e.key === u.key; } });
-      var baseSims = similar(a, baseIdx), top = {}, first = null;
+      var a = analyze(u.t), rules = scoreRules(a, { debug: true }), lk = u.lkey || u.key;
+      // gleicher Text zählt nicht; bei eingebauten Beispielen auch der gespeicherte (gekürzte) Text
+      function same(e) { return e.key === u.key || (e.base && e.key === lk); }
+      var sims = similar(a, evalIdx, { exclude: same }), baseSims = similar(a, baseIdx, { exclude: same });
+      var strict = sims.filter(function (x) { return x.sim < NEAR; }), top = {}, first = null;
+      var nd = sims.some(function (x) { return !x.e.base && x.sim >= NEAR; });
+      if (nd) nearDup++;
       VARIANTS.forEach(function (v) {
         var res = v.rules ? cloneRes(rules) : { results: [], byC: {} };
-        applyLearned(res, a, v.learned === false ? baseSims : sims, v.learned === false ? LIVE : v);
+        applyLearned(res, a, v.learned === false ? baseSims : v.strict ? strict : sims, v.learned === false ? LIVE : v);
         var picked = finish(res, a, {}), codes = picked.map(function (r) { return r.c.code; }), s = stats[v.id];
         top[v.id] = codes;
         if (v.id === "regeln") first = picked[0];
@@ -1563,7 +1701,7 @@ var Engine = (function () {
         srcs.forEach(function (rl) { count(trig, got + " " + u.c + " " + rl, { exp: u.c, got: got, rule: rl, n: 0 }); });
       }
       if (top.regeln.indexOf(u.c) === -1 || top.gelernt.indexOf(u.c) === -1) errors.push({ i: u.i, c: u.c, regeln: top.regeln, gelernt: top.gelernt });
-      if (details) details.push({ i: u.i, c: u.c, top: top });
+      if (details) details.push({ i: u.i, c: u.c, top: top, nearDup: nd, lernbar: !!u.st });
     }
 
     // 3. Häufige Wörter je Klassifizierung
@@ -1590,7 +1728,8 @@ var Engine = (function () {
       }
       function byN(x, y) { return y.n - x.n || cmp(x.exp, y.exp) || cmp(x.got, y.got) || cmp(x.rule || "", y.rule || ""); }
       report = {
-        total: cases.length, usable: usable.length, skipped: skipped, tested: tests.length, sampleEvery: every,
+        total: cases.length, usable: usable.length, skipped: skipped, zuKurzZumLernen: zuKurz,
+        sameText: sameText, nearDup: nearDup, tested: tests.length, sampleEvery: every,
         variants: VARIANTS.map(function (v) { var s = stats[v.id]; return { id: v.id, name: v.name, n: s.n, top1: s.top1, top3: s.top3, none: s.none }; }),
         perCode: Object.keys(perCode).map(function (c) {
           var p = perCode[c];
@@ -1641,7 +1780,7 @@ var Engine = (function () {
 
   return {
     build: build, classify: classify, prepare: prepare, norm: norm, setExamples: setExamples, learnable: learnable,
-    evaluation: evaluation, VARIANTS: VARIANTS,
+    learnText: learnText, LEARN_MAX: LEARN_MAX, evaluation: evaluation, VARIANTS: VARIANTS,
     get classes() { return classes; }, get byCode() { return byCode; }
   };
 })();
@@ -1654,11 +1793,13 @@ var Engine = (function () {
    ---------------------------------------------------------------------
    Alles läuft lokal (Browser oder Node), nichts wird verschickt.
    1. Text-Dateien (CSV/TSV, auch aus Excel kopiert): Zeichensatz und
-      Trennzeichen werden erkannt, Felder nach RFC 4180 gelesen
+      Trennzeichen werden erkannt ("sep=;" von Excel beachtet), Felder nach RFC 4180
    2. Excel (.xlsx): kleiner ZIP-Leser, XML per Textsuche (kein DOMParser),
-      es wird das erste Tabellenblatt gelesen. Altes .xls wird abgelehnt.
-   3. Spalten erraten (Text / Klassifizierung) und Zeilen in
-      Lernbeispiele { t, c } umwandeln
+      verbundene Zellen werden gefüllt, Blatt wählbar (Standard: erstes Blatt
+      mit Daten). Excel-2003-XML und HTML-Tabellen (beide oft ".xls") werden
+      gelesen, altes binäres .xls wird abgelehnt.
+   3. Spalten erraten (Kopfzeile, Text, Klassifizierung, Gruppen) und Zeilen in
+      Lernbeispiele { t, c } umwandeln. rows.lineNos = Zeilennummer wie in Excel.
    ===================================================================== */
 var Table = (function () {
   function fail(code, msg) { var e = new Error(msg); e.code = code; return e; }
@@ -1671,10 +1812,18 @@ var Table = (function () {
   function blank(v) { return !str(v).trim(); }
   function cell(r, i) { return str(r && r[i]); }
   function pad(rows) {
-    var w = 0;
+    var w = 0, i;
     rows.forEach(function (r) { if (r.length > w) w = r.length; });
-    rows.forEach(function (r) { while (r.length < w) r.push(""); });
+    rows.forEach(function (r) { for (i = 0; i < w; i++) if (r[i] == null) r[i] = ""; });
     return rows;
+  }
+  // Leere Zeilen weglassen, auffüllen; rows.lineNos = Zeilennummer, wie sie in Excel zu sehen ist
+  function withLines(rows, nums) {
+    var out = [], ln = [], i;
+    for (i = 0; i < rows.length; i++) if (rows[i] && !rows[i].every(blank)) { out.push(rows[i]); ln.push(nums[i]); }
+    // nicht aufzählbar: rows bleibt ein gewöhnliches Array (Vergleiche, for-in)
+    Object.defineProperty(pad(out), "lineNos", { value: ln, writable: true, configurable: true, enumerable: false });
+    return out;
   }
 
   /* ---------- Zeichensatz ---------- */
@@ -1701,6 +1850,13 @@ var Table = (function () {
     return chars(u.length, function (i) { var b = u[i]; return b >= 0x80 && b < 0xA0 ? CP1252[b - 0x80] : b; });
   }
 
+  // UTF-8 mit wenigen kaputten Bytes: viele gültige Nicht-ASCII-Zeichen, höchstens 5 % Ersatzzeichen
+  function mostlyUtf8(s) {
+    var good = 0, bad = 0, i, c;
+    for (i = 0; i < s.length; i++) { c = s.charCodeAt(i); if (c === 0xFFFD) bad++; else if (c > 0x7F) good++; }
+    return good >= 10 && bad <= (good + bad) * 0.05;
+  }
+
   // Bytes -> Text: BOM, sonst UTF-16 (viele Nullbytes), UTF-8, sonst windows-1252 (Excel "CSV" aus der Schweiz)
   function decode(bytes) {
     var u = bytesOf(bytes), s, n = Math.min(u.length, 200) >> 1, z0 = 0, z1 = 0, i;
@@ -1712,7 +1868,7 @@ var Table = (function () {
       if (n >= 2 && z1 >= n * 0.3 && z0 <= n * 0.1) s = utf16(u, false);
       else if (n >= 2 && z0 >= n * 0.3 && z1 <= n * 0.1) s = utf16(u, true);
       else {
-        try { s = new TextDecoder("utf-8", { fatal: true }).decode(u); } catch (e) { s = cp1252(u); }
+        try { s = new TextDecoder("utf-8", { fatal: true }).decode(u); } catch (e) { s = utf8(u); if (!mostlyUtf8(s)) s = cp1252(u); }
       }
     }
     return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
@@ -1721,20 +1877,30 @@ var Table = (function () {
   /* ---------- CSV / TSV ---------- */
   var DELIMS = ["\t", ";", ",", "|"];
 
+  // Schliessendes " zu einem Feld, das bei i-1 mit " beginnt. -1 = dieses " ist ein normales Zeichen:
+  // nie geschlossen, oder mehrzeilig und nach dem " geht das Feld weiter (einzelnes " am Anfang einer eingefügten Zelle)
+  function closeQuote(text, i, dc) {
+    var n = text.length, j = i, k, c;
+    for (;;) {
+      j = text.indexOf("\"", j);
+      if (j < 0) return -1;
+      if (text.charCodeAt(j + 1) !== 34) break;
+      j += 2;
+    }
+    for (k = j + 1; k < n && (c = text.charCodeAt(k)) !== dc && (c === 32 || c === 9); k++);
+    if (k >= n || c === dc || c === 10 || c === 13) return j;
+    return /[\r\n]/.test(text.slice(i, j)) ? -1 : j;
+  }
+
   // Datensätze nach RFC 4180 lesen ("" = Anführungszeichen, Trenner und Zeilenumbruch in "..." erlaubt)
   function records(text, d, max) {
     var rows = [], row = [], n = text.length, dc = d.charCodeAt(0), i = 0, j, c, f;
     if (!n) return rows;
     for (;;) {
       f = "";
-      if (text.charCodeAt(i) === 34) {
-        for (i++; ;) {
-          j = text.indexOf("\"", i);
-          if (j < 0) { f += text.slice(i); i = n; break; }
-          f += text.slice(i, j);
-          if (text.charCodeAt(j + 1) === 34) { f += "\""; i = j + 2; } else { i = j + 1; break; }
-        }
-        f = f.replace(/\r\n?/g, "\n");
+      if (text.charCodeAt(i) === 34 && (j = closeQuote(text, i + 1, dc)) >= 0) {
+        f = text.slice(i + 1, j).replace(/""/g, "\"").replace(/\r\n?/g, "\n");
+        i = j + 1;
       }
       // ohne Anführungszeichen (oder Rest nach dem schliessenden ") bis zum Trenner
       for (j = i; j < n; j++) { c = text.charCodeAt(j); if (c === dc || c === 10 || c === 13) break; }
@@ -1769,10 +1935,17 @@ var Table = (function () {
     return best;
   }
 
+  // Erste Zeile "sep=;" (Hinweis für Excel): legt das Trennzeichen fest, ist keine Datenzeile
+  var SEP = /^"?sep=([^\r\n"])"?[ \t]*(?:\r\n?|\n|$)/i;
+
+  // Text -> Zeilen; rows.lineNos = Nummer des Datensatzes (leere mitgezählt, wie die Zeilen in Excel)
   function parseDelimited(text, delim) {
+    var m, recs;
     text = str(text);
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-    return pad(records(text, delim || detectDelimiter(text)).filter(function (r) { return !r.every(blank); }));
+    if ((m = SEP.exec(text))) text = text.slice(m[0].length);
+    recs = records(text, delim || (m ? m[1] : detectDelimiter(text)));
+    return withLines(recs, recs.map(function (r, i) { return i + 1; }));
   }
 
   /* ---------- HTML-Tabelle (manche Programme speichern so ".xls"-Exporte) ---------- */
@@ -1781,18 +1954,33 @@ var Table = (function () {
   function isHtml(text) { return /^\s*</.test(text) && /<table\b/i.test(text); }
   // Tag bis zum ">" (ein ">" in Attributwerten mit Anführungszeichen zählt nicht)
   function tagRe(start, flags) { return new RegExp(start + "(?:\"[^\"]*\"|'[^']*'|[^'\">])*>", flags); }
-  var TR = tagRe("<tr\\b", "i"), TD = tagRe("<t[dh]\\b", "i"), BR = tagRe("<br\\b", "gi"), TAG = tagRe("<[a-zA-Z\\/!]", "g");
+  var TR = tagRe("<tr\\b", "i"), TD = new RegExp("<t[dh]\\b((?:\"[^\"]*\"|'[^']*'|[^'\">])*)>", "gi"),
+    BR = tagRe("<br\\b", "gi"), TAG = tagRe("<[a-zA-Z\\/!]", "g");
+  // rowspan/colspan (Excel schreibt Attribute auch ohne Anführungszeichen)
+  function span(tag, re, max) { var m = re.exec(tag), k = m ? parseInt(m[1], 10) : 1; return k > 1 ? Math.min(k, max) : 1; }
+  // Zeilen der HTML-Tabelle; rowspan/colspan: der Wert steht in allen überdeckten Zellen
   function htmlRows(text) {
-    var rows = [];
+    var rows = [], nums = [], carry = [];   // carry[Spalte] = { v: Wert, left: noch überdeckte Zeilen }
     text = text.replace(/<!--[\s\S]*?-->|<(script|style)\b[\s\S]*?<\/\1\s*>/gi, "");
-    text.split(TR).slice(1).forEach(function (tr) {
-      var row = tr.split(/<\/tr\s*>|<\/table\s*>/i)[0].split(TD).slice(1).map(function (td) {
+    text.split(TR).slice(1).forEach(function (tr, ti) {
+      var body = tr.split(/<\/tr\s*>|<\/table\s*>/i)[0], cells = [], row = [], k = 0, m, x;
+      function covered() { while (carry[k] && carry[k].left > 0) { row[k] = carry[k].v; carry[k].left--; k++; } }
+      TD.lastIndex = 0;
+      while ((m = TD.exec(body))) cells.push({ tag: m[1], at: m.index, from: TD.lastIndex });
+      cells.forEach(function (c, i) {
+        var td = body.slice(c.from, i + 1 < cells.length ? cells[i + 1].at : body.length),
+          cs = span(c.tag, /\bcolspan\s*=\s*["']?\s*(\d+)/i, 1000), rs = span(c.tag, /\browspan\s*=\s*["']?\s*(\d+)/i, 100000);
         td = td.split(/<\/t[dh]\s*>/i)[0].replace(/\s+/g, " ").replace(BR, "\n").replace(/<\/(p|div|li)\s*>/gi, "\n").replace(TAG, "");
-        return ent(td, HENT).split("\n").map(function (l) { return l.trim(); }).join("\n").replace(/^\n+|\n+$/g, "");
+        td = ent(td, HENT).split("\n").map(function (l) { return l.trim(); }).join("\n").replace(/^\n+|\n+$/g, "");
+        covered();
+        for (x = 0; x < cs; x++, k++) { row[k] = td; carry[k] = rs > 1 ? { v: td, left: rs - 1 } : null; }
       });
-      if (!row.every(blank)) rows.push(row);
+      // rechts davon: noch von oben überdeckte Spalten
+      for (; k < carry.length; k++) if (carry[k] && carry[k].left > 0) { row[k] = carry[k].v; carry[k].left--; }
+      rows.push(row); nums.push(ti + 1);
+      if (/<\/table\b/i.test(tr)) carry = [];   // Tabelle zu Ende
     });
-    return pad(rows);
+    return withLines(rows, nums);
   }
 
   /* ---------- ZIP (für .xlsx) ---------- */
@@ -1917,20 +2105,40 @@ var Table = (function () {
     if (t === "b") return v === "1" ? "TRUE" : v === "0" ? "FALSE" : v;
     return v;
   }
+  // Verbundene Zellen: Wert oben links in den ganzen Bereich (nur vorhandene Zeilen, nur bis zur Tabellenbreite)
+  // ranges: [erste Zeile, erste Spalte, letzte Zeile, letzte Spalte], Zeilen als Blatt-Nummern, Spalten ab 0
+  function fillMerged(rows, nums, ranges) {
+    var byNum = {}, w = 0, maxR = 0;
+    rows.forEach(function (r, i) { byNum[nums[i]] = r; if (r.length > w) w = r.length; if (nums[i] > maxR) maxR = nums[i]; });
+    ranges.forEach(function (m) {
+      var v = byNum[m[0]] ? str(byNum[m[0]][m[1]]) : "", r, c, row;
+      if (blank(v)) return;
+      for (r = m[0]; r <= Math.min(m[2], maxR); r++) {
+        if (!(row = byNum[r])) continue;
+        for (c = m[1]; c <= Math.min(m[3], w - 1); c++) if (blank(row[c])) row[c] = v;
+      }
+    });
+  }
   function sheetRows(xml, sst) {
-    var rows = [];
+    var rows = [], nums = [], r = 0, merged = [], tail = xml.lastIndexOf("sheetData>");
     each(xml, "row", function (ra, inner) {
-      var row = [], col = -1, i;
+      var row = [], col = -1;
+      r = +ra.r > 0 ? +ra.r : r + 1;
       each(inner, "c", function (a, content) {
         var k = a.r ? colIndex(a.r) : -1;
         col = k >= 0 ? k : col + 1;
         if (col < 16384) row[col] = content ? cellValue(a, content, sst) : "";
       });
-      for (i = 0; i < row.length; i++) if (row[i] == null) row[i] = "";
       while (row.length && blank(row[row.length - 1])) row.pop();
-      if (row.length) rows.push(row);
+      rows.push(row); nums.push(r);
     });
-    return pad(rows);
+    // <mergeCell ref="A2:A5"/> (steht nach sheetData)
+    if (tail >= 0 && xml.indexOf("mergeCell", tail) >= 0) each(xml.slice(tail), "mergeCell", function (a) {
+      var p = str(a.ref).split(":"), r1 = parseInt(str(p[0]).replace(/^\$?[A-Za-z]+\$?/, ""), 10), r2 = parseInt(str(p[1]).replace(/^\$?[A-Za-z]+\$?/, ""), 10);
+      if (p.length === 2 && r1 > 0 && r2 >= r1 && colIndex(p[0]) >= 0 && colIndex(p[1]) >= colIndex(p[0])) merged.push([r1, colIndex(p[0]), r2, colIndex(p[1])]);
+    });
+    fillMerged(rows, nums, merged);
+    return withLines(rows, nums);
   }
   function relPath(target) {   // Ziel einer Beziehung (relativ zu xl/ oder absolut) -> Pfad im ZIP
     var out = [];
@@ -1940,12 +2148,37 @@ var Table = (function () {
     return out.join("/");
   }
 
-  // Erstes Tabellenblatt (Reihenfolge in der Arbeitsmappe; ausgeblendete nur, wenn kein anderes da ist)
-  function readXlsx(bytes) {
+  // Blatt mit Daten: mindestens 5 Zeilen mit mindestens 2 gefüllten Zellen
+  function hasData(rows) {
+    var n = 0, i, j, k;
+    for (i = 0; i < rows.length && n < 5; i++) {
+      for (j = k = 0; j < rows[i].length && k < 2; j++) if (!blank(rows[i][j])) k++;
+      if (k >= 2) n++;
+    }
+    return n >= 5;
+  }
+  // Blatt wählen: opts.sheet (Index in names = sichtbare Blätter), sonst das erste mit Daten, sonst das erste.
+  // load(k) liefert die Zeilen (oder ein Promise darauf)
+  function pickSheet(names, load, opts) {
+    var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first;
+    function done(k, rows) { return { rows: rows, sheet: names[k], sheets: names, sheetIndex: k }; }
+    function next(k) {
+      return Promise.resolve(load(k)).then(function (rows) {
+        if (!k) first = rows;
+        if (hasData(rows)) return done(k, rows);
+        return k + 1 < names.length ? next(k + 1) : done(0, first);
+      });
+    }
+    if (want >= 0 && want < names.length && want % 1 === 0) return Promise.resolve(load(want)).then(function (rows) { return done(want, rows); });
+    return next(0);
+  }
+
+  // Tabellenblätter in der Reihenfolge der Arbeitsmappe (ausgeblendete nur, wenn kein anderes da ist)
+  function readXlsx(bytes, opts) {
     var zip;
     try { zip = unzip(bytesOf(bytes)); } catch (e) { return Promise.reject(e); }
     return Promise.all([zip.text("xl/workbook.xml"), zip.text("xl/_rels/workbook.xml.rels")]).then(function (r) {
-      var rels = {}, sheets = [], ssPath = "xl/sharedStrings.xml", ok, pick, nums;
+      var rels = {}, sheets = [], ssPath = "xl/sharedStrings.xml", ok, vis, nums;
       each(r[1] || "", "Relationship", function (a) {
         if (!a.Id || !a.Target) return;
         rels[a.Id] = relPath(a.Target);
@@ -1957,34 +2190,77 @@ var Table = (function () {
         sheets.push({ name: a.name || "", path: rels[id], hidden: /hidden/i.test(a.state || "") });
       });
       ok = sheets.filter(function (s) { return s.path && zip.has(s.path); });
-      pick = ok.filter(function (s) { return !s.hidden; })[0] || ok[0];
-      if (!pick) {   // ohne verwertbare Arbeitsmappe: xl/worksheets/sheetN.xml mit kleinstem N
+      vis = ok.filter(function (s) { return !s.hidden; });
+      if (!vis.length) vis = ok;
+      if (!vis.length) {   // ohne verwertbare Arbeitsmappe: xl/worksheets/sheetN.xml nach Nummer
         nums = zip.names.map(function (f) { var m = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(f); return m ? +m[1] : -1; })
           .filter(function (k) { return k >= 0; }).sort(function (a, b) { return a - b; });
         if (!nums.length) throw fail("ZIP", "In der Datei wurde keine Excel-Tabelle gefunden.");
-        pick = { name: "sheet" + nums[0], path: "xl/worksheets/sheet" + nums[0] + ".xml" };
-        if (!sheets.length) sheets = [pick];
+        vis = nums.map(function (k) { return { name: "sheet" + k, path: "xl/worksheets/sheet" + k + ".xml" }; });
       }
-      return Promise.all([zip.text(ssPath), zip.text(pick.path)]).then(function (x) {
+      return zip.text(ssPath).then(function (x) {
         var sst = [];
-        if (x[0]) each(x[0], "si", function (a, inner) { sst.push(runs(inner)); });
-        return { rows: sheetRows(x[1] || "", sst), sheet: pick.name, sheets: sheets.map(function (s) { return s.name; }) };
+        if (x) each(x, "si", function (a, inner) { sst.push(runs(inner)); });
+        return pickSheet(vis.map(function (s) { return s.name; }), function (k) {
+          return zip.text(vis[k].path).then(function (xml) { return sheetRows(xml || "", sst); });
+        }, opts);
       });
     });
   }
 
-  // Datei lesen: .xlsx, Text (CSV/TSV) oder HTML-Tabelle; altes .xls -> Fehler "XLS"
-  function read(bytes, fileName) {
+  /* ---------- Excel-2003-XML ("XML-Kalkulationstabelle", oft als .xls gespeichert) ---------- */
+  function isXml2003(text) { return /^\s*<\?xml/.test(text) && text.indexOf("urn:schemas-microsoft-com:office:spreadsheet") >= 0; }
+  function att(a, name) {   // Attribut ohne Namensraum-Präfix (ss:Index -> Index)
+    for (var k in a) if (k === name || k.slice(-name.length - 1) === ":" + name) return a[k];
+    return null;
+  }
+  // <Row ss:Index><Cell ss:Index ss:MergeAcross ss:MergeDown><Data>…</Data></Cell></Row>
+  function xml2003Rows(xml) {
+    var rows = [], nums = [], merged = [], r = 0;
+    each(xml.replace(/<(?:\w+:)?Comment\b[\s\S]*?<\/(?:\w+:)?Comment\s*>/g, ""), "Row", function (ra, inner) {
+      var row = [], c = 0;
+      r = +att(ra, "Index") > 0 ? +att(ra, "Index") : r + 1;
+      each(inner, "Cell", function (a, content) {
+        var ma = Math.min(+att(a, "MergeAcross") || 0, 1000), md = Math.min(+att(a, "MergeDown") || 0, 100000),
+          d = /<(?:\w+:)?Data\b[^>]*>([\s\S]*?)<\/(?:\w+:)?Data\s*>/.exec(content);
+        c = +att(a, "Index") > 0 ? +att(a, "Index") : c + 1;
+        if (c > 16384) return;
+        row[c - 1] = d ? xtext(d[1].replace(TAG, "")) : "";   // Rich-Text (<B>, <Font>) ohne Tags
+        if (ma > 0 || md > 0) merged.push([r, c - 1, r + md, c - 1 + ma]);
+        c += ma;
+      });
+      rows.push(row); nums.push(r);
+    });
+    fillMerged(rows, nums, merged);
+    return withLines(rows, nums);
+  }
+  function readXml2003(text, opts) {
+    var sheets = [], vis;
+    each(text, "Worksheet", function (a, inner) {
+      sheets.push({ name: att(a, "Name") || "", xml: inner, hidden: /<(?:\w+:)?Visible\s*>\s*Sheet(Very)?Hidden/i.test(inner) });
+    });
+    vis = sheets.filter(function (s) { return !s.hidden; });
+    if (!vis.length) vis = sheets;
+    if (!vis.length) return Promise.resolve({ rows: withLines([], []), format: "xml2003" });
+    return pickSheet(vis.map(function (s) { return s.name; }), function (k) { return xml2003Rows(vis[k].xml); }, opts)
+      .then(function (x) { return { rows: x.rows, format: "xml2003", sheet: x.sheet, sheets: x.sheets, sheetIndex: x.sheetIndex }; });
+  }
+
+  // Datei lesen: .xlsx, Excel-2003-XML, HTML-Tabelle oder Text (CSV/TSV); altes .xls -> Fehler "XLS".
+  // opts.sheet = Index des Blattes in der gelieferten Liste sheets
+  function read(bytes, fileName, opts) {
     return new Promise(function (ok) {
-      var u = bytesOf(bytes), text, d;
+      var u = bytesOf(bytes), text, d, m;
       if (isXls(u)) throw xlsError(u);
       if (isXlsx(u)) {
-        ok(readXlsx(u).then(function (x) { return { rows: x.rows, format: "xlsx", sheet: x.sheet, sheets: x.sheets }; }));
+        ok(readXlsx(u, opts).then(function (x) { return { rows: x.rows, format: "xlsx", sheet: x.sheet, sheets: x.sheets, sheetIndex: x.sheetIndex }; }));
         return;
       }
       text = decode(u);
+      if (isXml2003(text)) { ok(readXml2003(text, opts)); return; }
       if (isHtml(text)) { ok({ rows: htmlRows(text), format: "html" }); return; }
-      d = detectDelimiter(text);
+      m = SEP.exec(text);
+      d = m ? m[1] : detectDelimiter(text);
       ok({ rows: parseDelimited(text, d), format: "text", delimiter: d });
     });
   }
@@ -1998,7 +2274,10 @@ var Table = (function () {
       .replace(/[^a-z0-9]+/g, " ").trim();
   }
 
-  // Zellwert -> Code: 1. Zahl mit 3–5 Ziffern, 2. genaue Bezeichnung, 3. längste enthaltene Bezeichnung (eindeutig)
+  // Zellwert -> Code: 1. Zahl mit 3–5 Ziffern ("50'410" = 50410), 2. genaue Bezeichnung,
+  // 3. längste enthaltene Bezeichnung (eindeutig, mindestens 8 Zeichen), aber nur wenn sie fast den ganzen Wert
+  //    ausmacht (>= 70 %) oder der Wert eine Hierarchie ist ("Operations > …", "Kategorie: …").
+  //    So werden Platzhalter wie "Grund unbekannt" oder "Kein Material" nicht zu einem Code.
   function codeResolver(classes) {
     var known = Object.create(null), exact = Object.create(null), labels = [], memo = Object.create(null);
     (classes || []).forEach(function (c) {
@@ -2013,17 +2292,23 @@ var Table = (function () {
     });
     labels.sort(function (a, b) { return b.len - a.len; });
     function find(s) {
-      var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, hit = null;
-      s = s.trim();
+      var re = /(^|\D)(\d{3,5})(?!\d)/g, m, v, i, k, x, L, hit = null, tree;
+      s = s.trim().replace(/(\d)['\u2019`\u2009\u202F](?=\d{3}(?!\d))/g, "$1");   // Tausendertrennzeichen
       while ((m = re.exec(s))) if (known[m[2]]) return m[2];
       v = norm(s);
       if (!v) return null;
       if (exact[v] && exact[v] !== "?") return exact[v];
-      v = " " + v + " ";
+      tree = /[>\/|:()\u2013-]/.test(s);
+      L = v.length; v = " " + v + " ";
       for (i = 0; i < labels.length && (!hit || labels[i].len === hit.len); i++) {
-        if (v.indexOf(labels[i].n) < 0) continue;
-        if (hit && hit.code !== labels[i].code) return null;
-        hit = labels[i];
+        x = labels[i];
+        if (x.len >= 0.7 * L) k = v.indexOf(x.n);
+        // Hierarchie: Bezeichnung am Ende, höchstens ein kurzer Zusatz danach ("… > Lieferverzögerung (Kulanz)")
+        else if (tree) k = v.indexOf(x.n, Math.max(0, Math.floor(L - x.len / 0.6)));
+        else break;   // alle weiteren sind noch kürzer
+        if (k < 0) continue;
+        if (hit && hit.code !== x.code) return null;
+        hit = x;
       }
       return hit ? hit.code : null;
     }
@@ -2034,77 +2319,140 @@ var Table = (function () {
     };
   }
 
-  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent)/i;
-  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text)/i;
+  // Titel, bei denen die Spalte nicht als Text taugt (ausser der Titel sagt zugleich "Text" und die Zellen sind lang)
+  var SKIP = /(e-?mail|name|telefon|phone|\btel\b|adresse|address|strasse|plz|\bort\b|kunden-?nr|kundennummer|bestell-?nr|bestellnummer|auftrags-?nr|order|datum|date|zeit|time|\bid\b|nummer|number|status|owner|besitzer|bearbeiter|agent|kunde|kontakt|absender|\bvon\b|from|account|firma|link|\burls?\b|checksum|pr(ue|ü)fsumme|do not modify)/i;
+  var EXTRA = /(betreff|subject|titel|title|beschreibung|description|nachricht|message|notiz|note|kommentar|comment|anliegen|problem|text|body|inhalt|mailtext|mail text|bemerkung|anmerkung|anfrage)/i;
+  var CODEHEAD = /(klass|kateg|categ|class|code|grund|reason|typ|thema|topic)/i;
   var NUMERIC = /^[\d\s.,:\/+-]+$/;
+  // Summenzeilen in gruppierten Berichten (in der Spalte Klassifizierung)
+  var SUBTOTAL = /^\s*(zwischen|gesamt)?summe|^\s*gesamt|^\s*(sub-?|grand\s+)?total\b|^\s*anzahl\b|^\s*count\b|\b(ergebnis|summe|total)\s*$/i;
+  // E-Mail-Adresse, Link, GUID, Prüfsumme/Base64
+  var JUNK = /^(https?:\/\/|www\.)|^[{(]?[0-9a-f]{8}(-?[0-9a-f]{4}){3}-?[0-9a-f]{12}[)}]?$|^(?=\S*\d)(?=\S*[a-z])[A-Za-z0-9+\/_=-]{16,}$/i;
+  function words(v) { return v.split(/\s+/).length; }
+  function subtotal(v) { return SUBTOTAL.test(v); }
 
-  // Kopfzeile? Welche Spalte enthält den Code, welche den Text?
+  // Kopfzeile, Spalte mit der Klassifizierung, Textspalten, Gruppen ohne Code in jeder Zeile?
   function guess(rows, resolve) {
     rows = rows || [];
-    var n = rows.length, w = 0, sample = [], stats = [], codeCol = -1, best = 0, header, main = -1, cand = [], i, j, v, s;
+    var n = rows.length, w = 0, top = Math.min(n, 315), codeCol = -1, best = 0, headerRow = -1, first = -1, hc = [],
+      sample = [], stats = [], main = -1, cand = [], textCols, fillDown = false, i, j, k, v, s, ne, ok, tn, te, any;
     rows.forEach(function (r) { if (r.length > w) w = r.length; });
-    for (i = 1; i <= Math.min(n - 1, 300); i++) sample.push(rows[i]);
-    if (n === 1) sample.push(rows[0]);
+    // 1. Klassifizierung: grösster Anteil auflösbarer Werte (mindestens 30 %, ohne Summenzeilen)
     for (j = 0; j < w; j++) {
-      s = { ne: 0, ok: 0, len: 0, num: 0 };
+      for (i = ne = ok = 0; i < top; i++) {
+        v = cell(rows[i], j).trim();
+        if (!v || subtotal(v)) continue;
+        ne++; if (resolve(v)) ok++;
+      }
+      if (ne && ok / ne >= 0.3 && ok / ne > best) { best = ok / ne; codeCol = j; }
+    }
+    // 2. Kopfzeile: letzte Zeile vor dem ersten gültigen Code (in den ersten 15), deren Code-Zelle Text ist;
+    //    Titel- und Filterzeilen darüber zählen nicht. Bevorzugt eine Zeile, die wie Spaltentitel aussieht.
+    function headerLike(r) {   // mindestens 2 kurze, verschiedene, nicht numerische Zellen
+      var seen = Object.create(null), cnt = 0, x, y;
+      for (x = 0; x < w; x++) {
+        y = cell(rows[r], x).trim();
+        if (!y) continue;
+        if (y.length > 40 || NUMERIC.test(y) || seen[y]) return false;
+        seen[y] = 1; cnt++;
+      }
+      return cnt >= 2;
+    }
+    if (codeCol >= 0) {
+      for (i = 0; i < Math.min(n, 16) && first < 0; i++) {
+        v = cell(rows[i], codeCol).trim();
+        if (v && !subtotal(v) && resolve(v)) first = i;
+        else if (i < 15 && v && !NUMERIC.test(v) && !subtotal(v)) hc.push(i);
+      }
+      if (first >= 0 && hc.length) {
+        for (k = -1, i = 0; i < hc.length; i++) {
+          s = headerLike(hc[i]) ? (CODEHEAD.test(cell(rows[hc[i]], codeCol)) ? 2 : 1) : 0;
+          if (s >= k) { k = s; headerRow = hc[i]; }
+        }
+      } else {
+        v = cell(rows[0], codeCol).trim();
+        headerRow = v && !NUMERIC.test(v) && !resolve(v) ? 0 : -1;
+      }
+    } else headerRow = n > 1 && headerLike(0) ? 0 : -1;
+    // 3. Datenzeilen (ohne Summenzeilen) auswerten
+    for (i = headerRow + 1; i < n && sample.length < 300; i++) if (codeCol < 0 || !subtotal(cell(rows[i], codeCol))) sample.push(rows[i]);
+    for (j = 0; j < w; j++) {
+      s = { ne: 0, ok: 0, len: 0, words: 0, num: 0, one: 0, junk: 0 };
       for (i = 0; i < sample.length; i++) {
         v = cell(sample[i], j).trim();
         if (!v) continue;
-        s.ne++; s.len += v.length;
+        k = words(v);
+        s.ne++; s.len += v.length; s.words += k;
         if (resolve(v)) s.ok++;
         if (NUMERIC.test(v)) s.num++;
+        if (k === 1) s.one++;
+        if (JUNK.test(v) || k <= 4 && v.indexOf("@") >= 0) s.junk++;
       }
       s.frac = s.ne ? s.ok / s.ne : 0; s.avg = s.ne ? s.len / s.ne : 0;
+      s.score = s.ne ? s.ne / sample.length * s.words / s.ne : 0;   // Füllgrad × Wörter pro Zelle
       stats.push(s);
-      if (s.frac >= 0.3 && s.frac > best) { best = s.frac; codeCol = j; }
     }
-    if (codeCol >= 0) {
-      v = cell(rows[0], codeCol).trim();
-      header = !!v && !NUMERIC.test(v) && !resolve(v);
-    } else {
-      header = n > 1 && w > 0;
-      for (j = 0; j < w; j++) {
-        v = cell(rows[0], j).trim();
-        if (!v || v.length > 40 || NUMERIC.test(v)) header = false;
-      }
-    }
-    // Spaltentitel (nur kurze Zellen der Kopfzeile zählen als Titel)
-    function title(k) { var t = header ? cell(rows[0], k).trim() : ""; return t.length <= 40 ? t : ""; }
+    // 4. Textspalten: Haupttext = meiste Wörter (bei mindestens 30 % gefüllten Zeilen), dazu Spalten mit Text-Titel
+    function title(x) { var t = headerRow >= 0 ? cell(rows[headerRow], x).trim() : ""; return t.length <= 40 ? t : ""; }
     for (j = 0; j < w; j++) {
-      if (j === codeCol || SKIP.test(title(j)) || stats[j].num > stats[j].ne * 0.5) continue;
+      s = stats[j];
+      if (j === codeCol || !s.ne || s.frac >= 0.3 || s.num > s.ne * 0.5 || s.one > s.ne * 0.7 || s.junk > s.ne * 0.3) continue;
+      if (SKIP.test(title(j)) && !(EXTRA.test(title(j)) && s.avg >= 20)) continue;
       cand.push(j);
-      if (stats[j].avg >= 8 && (main < 0 || stats[j].avg > stats[main].avg)) main = j;
+      if (s.ne >= 0.3 * sample.length && s.words >= 1.5 * s.ne && (main < 0 || s.score > stats[main].score)) main = j;
     }
-    return {
-      header: header, codeCol: codeCol,
-      textCols: main < 0 ? [] : cand.filter(function (k) {
-        return k === main || (header && EXTRA.test(title(k)) && stats[k].avg >= 5);
-      })
-    };
+    textCols = main < 0 ? [] : cand.filter(function (x) { return x === main || headerRow >= 0 && EXTRA.test(title(x)) && stats[x].avg >= 5; });
+    // 5. Gruppierter Bericht: Klassifizierung nur in der ersten Zeile der Gruppe, darunter leer
+    if (codeCol >= 0 && textCols.length) {
+      tn = te = 0; any = false;
+      sample.forEach(function (r) {
+        var c = cell(r, codeCol).trim();
+        if (c && resolve(c)) any = true;
+        if (!textCols.some(function (x) { return !blank(cell(r, x)); })) return;
+        tn++; if (!c) te++;
+      });
+      fillDown = any && tn > 0 && te >= 0.3 * tn;
+    }
+    return { headerRow: headerRow, codeCol: codeCol, textCols: textCols, fillDown: fillDown };
   }
 
-  // Zeilen -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code oder ohne Text
+  // Zeilen nach der Kopfzeile -> Lernbeispiele. Jede Datenzeile zählt genau einmal: Fall, ohne Code, ohne Text,
+  // Summenzeile oder (bei fillDown) Gruppenzeile. fillDown: leere Klassifizierung = die letzte darüber (bis zur Summenzeile)
   function toCases(rows, cfg, resolve) {
-    var out = { cases: [], total: 0, noCode: 0, noText: 0, unknown: [] }, unk = Object.create(null), order = [];
-    var cols = cfg.textCols || [], codeCol = cfg.codeCol == null ? -1 : cfg.codeCol, i, j, v, c, t;
+    var out = { cases: [], total: 0, noCode: 0, noText: 0, subtotal: 0, groupRows: 0, filled: 0, unknown: [], textColsWithCodes: [] };
+    var unk = Object.create(null), order = [], cols = cfg.textCols || [], codeCol = cfg.codeCol == null ? -1 : cfg.codeCol;
+    var hr = cfg.headerRow != null ? +cfg.headerRow : cfg.header ? 0 : -1, fill = !!cfg.fillDown && codeCol >= 0, last = null;
+    var tc = cols.map(function () { return { ne: 0, ok: 0 }; }), lines, i, j, v, c, t, x, filled;
     rows = rows || [];
-    for (i = cfg.header ? 1 : 0; i < rows.length; i++) {
+    lines = rows.lineNos;
+    for (i = Math.max(hr + 1, 0); i < rows.length; i++) {
       out.total++;
       v = codeCol >= 0 ? cell(rows[i], codeCol).trim() : "";
+      if (v && subtotal(v)) { out.subtotal++; last = null; continue; }
       c = v ? resolve(v) : null;
+      filled = false;
+      if (v) last = c; else if (fill && last) { c = last; filled = true; }
+      t = [];
+      for (j = 0; j < cols.length; j++) {
+        x = cell(rows[i], cols[j]).trim();
+        if (!x) continue;
+        if (t.indexOf(x) < 0) t.push(x);   // gleicher Text in zwei Spalten nur einmal
+        if (tc[j].ne < 500) { tc[j].ne++; if (resolve(x)) tc[j].ok++; }
+      }
       if (!c) {
         out.noCode++;
         if (v) { if (!(v in unk)) { unk[v] = 0; order.push(v); } unk[v]++; }
         continue;
       }
-      t = [];
-      for (j = 0; j < cols.length; j++) { v = cell(rows[i], cols[j]).trim(); if (v) t.push(v); }
-      if (!t.length) { out.noText++; continue; }
-      out.cases.push({ t: t.join("\n"), c: c, row: i });
+      if (!t.length) { if (fill && v) out.groupRows++; else out.noText++; continue; }
+      out.cases.push({ t: t.join("\n"), c: c, row: i, line: lines && lines[i] != null ? lines[i] : i + 1 });
+      if (filled) out.filled++;
     }
     out.unknown = order.map(function (k, idx) { return [k, unk[k], idx]; })
       .sort(function (a, b) { return b[1] - a[1] || a[2] - b[2]; })
-      .slice(0, 10).map(function (x) { return [x[0], x[1]]; });
+      .slice(0, 10).map(function (y) { return [y[0], y[1]]; });
+    // Textspalten, in denen oft ein Code steht (verrät die Lösung)
+    out.textColsWithCodes = cols.filter(function (k, idx) { return tc[idx].ne && tc[idx].ok >= 0.3 * tc[idx].ne; });
     return out;
   }
 
@@ -2160,10 +2508,10 @@ var Table = (function () {
   var learned = loadLearned();
   function reindex() { Engine.setExamples(learned); updateLearnedUI(); }
 
+  function learnText(raw) { return Engine.learnText ? Engine.learnText(raw) : Engine.learnable(raw).slice(0, 1000); }
   function learn(code) {
-    var t = Engine.learnable(q.value);
+    var t = learnText(q.value);
     if (!t || !BY[code]) return null;
-    t = t.slice(0, 1500);
     for (var i = 0; i < learned.length; i++) if (learned[i].t === t && learned[i].c === code) return null;
     var item = { t: t, c: code, d: new Date().toISOString().slice(0, 10) };
     learned.push(item); saveLearned(); reindex();
@@ -2178,17 +2526,23 @@ var Table = (function () {
     $("badge").textContent = CLASSES.length + " Klassifizierungen · " + fmt(learned.length) + (learned.length === 1 ? " gelernter Fall" : " gelernte Fälle");
     $("learnedCount").textContent = "(" + fmt(learned.length) + ")";
     $("storageWarn").hidden = storageOk;
-    var nImp = learned.filter(function (e) { return e.s === "import"; }).length;
-    $("btnClearImported").hidden = !nImp;
-    $("btnClearImported").textContent = "Importierte löschen (" + fmt(nImp) + ")";
-    var items = learned.slice().reverse().slice(0, 40);
-    $("learnedList").innerHTML = items.length ? items.map(function (e) {
-      var c = BY[e.c];
-      return '<div class="litem"><code>' + esc(e.c) + '</code><span class="lt">' + esc(c ? c.label : "") + '</span>' +
-        '<button class="del" type="button" data-del="' + learned.indexOf(e) + '" title="Diesen Fall löschen">×</button>' +
+    // Von Hand gelernte Fälle zuerst (neueste oben), importierte nur als Anzahl und die letzten 10
+    var own = [], imported = [];
+    learned.forEach(function (e, i) { (e.s === "import" ? imported : own).push(i); });
+    $("btnClearImported").hidden = !imported.length;
+    $("btnClearImported").textContent = "Importierte löschen (" + fmt(imported.length) + ")";
+    function item(i) {
+      var e = learned[i], c = BY[e.c];
+      return '<div class="litem"><code>' + esc(e.c) + '</code><span class="lt">' + esc(c ? c.label : "") +
+        (e.s === "import" ? '<span class="tag-imp">importiert</span>' : "") + '</span>' +
+        '<button class="del" type="button" data-del="' + i + '" title="Diesen Fall löschen">×</button>' +
         '<span class="ls">' + esc(snippet(e.t, 160)) + "</span></div>";
-    }).join("") + (learned.length > 40 ? '<p class="note">… und ' + (learned.length - 40) + ' ältere</p>' : "")
-      : '<p class="note">Noch keine gelernten Fälle.</p>';
+    }
+    var html = "";
+    if (own.length) html += own.slice(-40).reverse().map(item).join("") + (own.length > 40 ? '<p class="note">… und ' + fmt(own.length - 40) + " ältere von Hand gelernte</p>" : "");
+    if (imported.length) html += '<p class="note">' + (own.length ? "" : "Noch keine von Hand gelernten Fälle. ") + fmt(imported.length) +
+      (imported.length === 1 ? " importierter Fall" : " importierte Fälle") + " (die letzten 10):</p>" + imported.slice(-10).reverse().map(item).join("");
+    $("learnedList").innerHTML = html || '<p class="note">Noch keine gelernten Fälle.</p>';
   }
 
   // ---------- Kopieren ----------
@@ -2230,7 +2584,8 @@ var Table = (function () {
       }
       var item = q.value.trim() ? learn(code) : null;
       if (btn && btn.closest && btn.closest("#pickList")) { $("pick").value = ""; renderPick(); }
-      if (item) toast("Kopiert: " + text + " · als Fall gelernt", "Nicht lernen", function () { unlearn(item); });
+      if (item && !storageOk) toast("Kopiert: " + text + " · gelernt, aber NICHT gespeichert (Browserspeicher voll oder gesperrt)", "Nicht lernen", function () { unlearn(item); });
+      else if (item) toast("Kopiert: " + text + " · als Fall gelernt", "Nicht lernen", function () { unlearn(item); });
       else toast("Kopiert: " + text);
     });
   }
@@ -2370,8 +2725,10 @@ var Table = (function () {
 
   // ---------- Export / Import ----------
   $("btnExport").addEventListener("click", function () {
-    if (!learned.length) { toast("Noch keine gelernten Fälle"); return; }
-    var data = { app: "Fall-Klassifizierung", version: 1, exportiert: new Date().toISOString(), beispiele: learned };
+    // Importierte Fälle (Kundentexte aus einer Excel-Datei) werden nicht exportiert – sie stehen ja in der Datei
+    var own = learned.filter(function (e) { return e.s !== "import"; });
+    if (!own.length) { toast(learned.length ? "Nur importierte Fälle vorhanden – diese werden nicht exportiert" : "Noch keine gelernten Fälle"); return; }
+    var data = { app: "Fall-Klassifizierung", version: 1, exportiert: new Date().toISOString(), beispiele: own };
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -2426,23 +2783,47 @@ var Table = (function () {
 
   // ---------- Fälle importieren und testen ----------
   var resolveCode = Table.codeResolver(CLASSES);
-  var imp = { rows: null, cfg: null, res: null, format: "", ctl: null, result: null, cases: null, errN: 25, codesAll: false };
+  var imp = { bytes: null, name: "", sheets: null, sheetIndex: 0, rows: null, cfg: null, res: null, format: "",
+    ctl: null, result: null, cases: null, errN: 25, codesAll: false, wordsOn: false, wordsOff: {} };
   var DELIM = { "\t": "Tabulator", ";": "Semikolon", ",": "Komma", "|": "senkrechter Strich" };
 
   function impError(msg) { $("impErr").textContent = msg || ""; $("impErr").hidden = !msg; }
+  function impWarn(html) { $("impWarn").innerHTML = html || ""; $("impWarn").hidden = !html; }
   function colName(i) { var s = ""; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; }
   function codeHtml(code) { var c = BY[code]; return "<code>" + esc(code) + "</code> " + esc(c ? c.label : ""); }
+  function lineNo(k) { return imp.rows && imp.rows.lineNos ? imp.rows.lineNos[k] : k + 1; }
+  function colTitle(i) {
+    var h = imp.cfg.headerRow >= 0 ? String(imp.rows[imp.cfg.headerRow][i] || "").trim() : "";
+    return colName(i) + (h ? " „" + snippet(h, 30) + "“" : "");
+  }
 
-  function loadTable(rows, info) {
-    impError("");
+  function resetImport() {
     cancelEval();
-    if (!rows || !rows.length) { impError("Keine Zeilen gefunden."); return false; }
-    if (rows[0].length < 2) { impError("Nur eine Spalte gefunden – es braucht eine Spalte mit dem Text und eine mit der Klassifizierung."); return false; }
-    imp.rows = rows;
+    imp.rows = imp.cfg = imp.res = imp.result = null;
+    $("impMap").hidden = true; $("evalOut").innerHTML = ""; impWarn("");
+  }
+  function renderSheets() {
+    var sh = imp.sheets;
+    $("impSheetBox").hidden = !(sh && sh.length > 1);
+    $("impSheet").innerHTML = sh ? sh.map(function (n, i) {
+      return '<option value="' + i + '"' + (i === imp.sheetIndex ? " selected" : "") + ">" + esc(n) + "</option>";
+    }).join("") : "";
+  }
+
+  function loadTable(rows, info, format) {
+    impError(""); cancelEval();
+    var sheetHint = imp.sheets && imp.sheets.length > 1 ? " Gelesen wurde das Blatt „" + imp.sheets[imp.sheetIndex] + "“ – oben ein anderes Blatt wählen." : "";
+    if (!rows || !rows.length) { resetImport(); impError("Keine Zeilen gefunden." + sheetHint); return false; }
+    if (rows[0].length < 2) { resetImport(); impError("Nur eine Spalte gefunden – es braucht eine Spalte mit dem Text und eine mit der Klassifizierung." + sheetHint); return false; }
+    imp.rows = rows; imp.format = format;
     imp.cfg = Table.guess(rows, resolveCode);
     $("impMap").hidden = false;
     $("impFileInfo").textContent = info + " · " + fmt(rows.length) + " Zeilen, " + rows[0].length + " Spalten";
-    $("impHeader").checked = imp.cfg.header;
+    var opts = '<option value="-1">keiner Zeile (keine Spaltennamen)</option>';
+    for (var k = 0; k < Math.min(15, rows.length); k++) opts += '<option value="' + k + '">Zeile ' + lineNo(k) + ": " + esc(snippet(rows[k].filter(function (x) { return String(x).trim(); }).join(" · "), 34)) + "</option>";
+    $("impHeaderRow").innerHTML = opts;
+    $("impHeaderRow").value = String(imp.cfg.headerRow);
+    $("impFill").checked = !!imp.cfg.fillDown;
     renderMap(); updateCases();
     return true;
   }
@@ -2450,20 +2831,25 @@ var Table = (function () {
   function colClass(i) { return imp.cfg.codeCol === i ? "col-code" : imp.cfg.textCols.indexOf(i) !== -1 ? "col-text" : ""; }
   function renderMap() {
     var rows = imp.rows, cfg = imp.cfg, n = rows[0].length, i, html = "<thead><tr>";
+    var focusCol = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute("data-col");
     for (i = 0; i < n; i++) {
       var role = cfg.codeCol === i ? "code" : cfg.textCols.indexOf(i) !== -1 ? "text" : "";
-      html += '<th class="' + colClass(i) + '">' + colName(i) + (cfg.header && String(rows[0][i]).trim() ? ": " + esc(snippet(rows[0][i], 30)) : "") +
-        '<select data-col="' + i + '" aria-label="Spalte ' + colName(i) + '">' +
+      html += '<th class="' + colClass(i) + '">' + esc(colTitle(i)) +
+        '<select data-col="' + i + '" aria-label="Spalte ' + esc(colTitle(i)) + ' verwenden als">' +
         '<option value=""' + (role ? "" : " selected") + '>– nicht verwenden</option>' +
         '<option value="text"' + (role === "text" ? " selected" : "") + ">Text</option>" +
         '<option value="code"' + (role === "code" ? " selected" : "") + ">Klassifizierung</option></select></th>";
     }
     html += "</tr></thead><tbody>";
-    var start = cfg.header ? 1 : 0;
+    var start = cfg.headerRow + 1;
     rows.slice(start, start + 5).forEach(function (r) {
       html += "<tr>" + r.map(function (cell, j) { return '<td class="' + colClass(j) + '">' + esc(snippet(cell, 140)) + "</td>"; }).join("") + "</tr>";
     });
     $("impPreview").innerHTML = html + "</tbody>";
+    if (focusCol !== null && focusCol !== undefined) {
+      var sel = $("impPreview").querySelector('select[data-col="' + focusCol + '"]');
+      if (sel) sel.focus();
+    }
   }
   $("impPreview").addEventListener("change", function (e) {
     var sel = e.target.closest("select[data-col]");
@@ -2472,10 +2858,11 @@ var Table = (function () {
     cfg.textCols = cfg.textCols.filter(function (c) { return c !== col; });
     if (cfg.codeCol === col) cfg.codeCol = -1;
     if (sel.value === "text") cfg.textCols = cfg.textCols.concat([col]).sort(function (a, b) { return a - b; });
-    if (sel.value === "code") { cfg.textCols = cfg.textCols.filter(function (c) { return c !== col; }); cfg.codeCol = col; }
+    if (sel.value === "code") cfg.codeCol = col;
     renderMap(); updateCases();
   });
-  $("impHeader").addEventListener("change", function () { imp.cfg.header = this.checked; renderMap(); updateCases(); });
+  $("impHeaderRow").addEventListener("change", function () { imp.cfg.headerRow = parseInt(this.value, 10); renderMap(); updateCases(); });
+  $("impFill").addEventListener("change", function () { imp.cfg.fillDown = this.checked; updateCases(); });
 
   function updateCases() {
     cancelEval();
@@ -2488,12 +2875,18 @@ var Table = (function () {
     html += " · von " + fmt(r.total) + " Zeilen";
     if (r.noCode) html += " · " + fmt(r.noCode) + " ohne gültige Klassifizierung";
     if (r.noText) html += " · " + fmt(r.noText) + " ohne Text";
+    if (r.subtotal) html += " · " + fmt(r.subtotal) + " Summenzeilen";
+    if (r.groupRows) html += " · " + fmt(r.groupRows) + " Gruppenzeilen";
+    if (r.filled) html += "<br>" + fmt(r.filled) + " Fälle haben die Klassifizierung aus der Zeile darüber.";
     if (imp.cfg.codeCol < 0) html += "<br>Bitte eine Spalte als <b>Klassifizierung</b> wählen.";
     if (!imp.cfg.textCols.length) html += "<br>Bitte mindestens eine Spalte als <b>Text</b> wählen.";
     if (r.unknown.length) html += "<br>Nicht erkannte Klassifizierungen: " + r.unknown.slice(0, 6).map(function (u) {
       return "„" + esc(snippet(u[0], 40)) + "“ (" + fmt(u[1]) + "×)";
-    }).join(", ");
+    }).join(", ") + " – diese Zeilen werden weggelassen.";
     $("impSum").innerHTML = html;
+    var bad = r.textColsWithCodes || [];
+    impWarn(bad.length ? "Achtung: " + bad.map(function (c) { return "Spalte " + esc(colTitle(c)); }).join(", ") +
+      " enthält Klassifizierungen. Als Text würde sie die Lösung verraten und das Ergebnis verfälschen – bitte auf „nicht verwenden“ stellen." : "");
     $("btnEval").disabled = $("btnLearnAll").disabled = !r.cases.length;
   }
 
@@ -2509,25 +2902,36 @@ var Table = (function () {
   function readError(err) {
     if (err && err.encrypted) return "Diese Excel-Datei ist mit einem Passwort geschützt. Bitte in Excel ohne Passwort als .xlsx oder CSV speichern.";
     if (err && err.code === "XLS") return "Alte Excel-Datei (.xls): bitte in Excel mit „Speichern unter“ als .xlsx oder CSV speichern.";
-    if (err && err.code === "ZIP") return "Diese Excel-Datei kann nicht gelesen werden (evtl. mit Passwort geschützt). Bitte als CSV speichern.";
+    if (err && err.code === "ZIP") return "Diese Excel-Datei kann nicht gelesen werden. Bitte in Excel als CSV speichern oder die Zeilen kopieren und einfügen.";
     if (typeof DecompressionStream === "undefined") return "Dieser Browser kann .xlsx-Dateien nicht lesen. Bitte in Excel als CSV speichern oder die Zeilen kopieren und einfügen.";
     return "Die Datei konnte nicht gelesen werden.";
+  }
+  function openFile(sheet) {
+    impError("");
+    return Table.read(imp.bytes, imp.name, sheet === undefined ? undefined : { sheet: sheet }).then(function (res) {
+      imp.sheets = res.sheets && res.sheets.length ? res.sheets : null;
+      imp.sheetIndex = res.sheetIndex || 0;
+      renderSheets();
+      var info = imp.name + (res.format === "xlsx" ? " (Excel" + (imp.sheets && imp.sheets.length > 1 ? ", Blatt „" + res.sheet + "“" : "") + ")"
+        : res.format === "html" ? " (Tabelle aus einer Webseite)"
+        : res.format === "xml2003" ? " (Excel-XML)"
+        : " (Text, getrennt mit " + (DELIM[res.delimiter] || "?") + ")");
+      loadTable(res.rows, info, res.format);
+    }).catch(function (err) {
+      imp.sheets = null; renderSheets(); resetImport();
+      impError(readError(err));
+      if (window.console) console.warn(err);
+    });
   }
   $("btnImpFile").addEventListener("click", function () { $("impFile").click(); });
   $("impFile").addEventListener("change", function (e) {
     var f = e.target.files && e.target.files[0];
     e.target.value = "";
     if (!f) return;
-    impError("");
-    readBytes(f).then(function (bytes) { return Table.read(bytes, f.name); }).then(function (res) {
-      imp.format = res.format;
-      var info = f.name + (res.format === "xlsx"
-        ? " (Excel" + (res.sheets && res.sheets.length > 1 ? ", nur das erste Blatt „" + res.sheet + "“" : "") + ")"
-        : res.format === "html" ? " (Tabelle aus einer Webseite)"
-        : " (Text, getrennt mit " + (DELIM[res.delimiter] || "?") + ")");
-      loadTable(res.rows, info);
-    }).catch(function (err) { impError(readError(err)); if (window.console) console.warn(err); });
+    readBytes(f).then(function (bytes) { imp.bytes = bytes; imp.name = f.name; return openFile(); })
+      .catch(function (err) { resetImport(); impError(readError(err)); });
   });
+  $("impSheet").addEventListener("change", function () { if (imp.bytes) openFile(parseInt(this.value, 10)); });
   $("btnImpPaste").addEventListener("click", function () {
     var box = $("impPasteBox");
     box.hidden = !box.hidden;
@@ -2536,8 +2940,8 @@ var Table = (function () {
   $("btnImpPasteOk").addEventListener("click", function () {
     var t = $("impPaste").value;
     if (!t.trim()) { impError("Zuerst Zeilen aus Excel einfügen."); return; }
-    imp.format = "eingefügt";
-    if (loadTable(Table.parseDelimited(t), "Eingefügte Zeilen")) { $("impPaste").value = ""; $("impPasteBox").hidden = true; }
+    imp.bytes = null; imp.sheets = null; renderSheets();
+    if (loadTable(Table.parseDelimited(t), "Eingefügte Zeilen", "eingefügt")) { $("impPaste").value = ""; $("impPasteBox").hidden = true; }
   });
 
   // --- Genauigkeit testen (läuft in kleinen Schritten, damit die Seite bedienbar bleibt)
@@ -2551,7 +2955,7 @@ var Table = (function () {
   $("btnEval").addEventListener("click", function () {
     if (!imp.res || !imp.res.cases.length) return;
     imp.cases = imp.res.cases;
-    imp.result = null; imp.errN = 25; imp.codesAll = false;
+    imp.result = null; imp.errN = 25; imp.codesAll = false; imp.wordsOn = false; imp.wordsOff = {};
     var ctl = imp.ctl = Engine.evaluation(imp.cases.map(function (x) { return { t: x.t, c: x.c }; }), { maxTests: 3000, minDocs: 5 });
     $("evalOut").innerHTML = ""; $("impProg").hidden = false; $("btnEval").disabled = true;
     (function tick() {
@@ -2573,38 +2977,72 @@ var Table = (function () {
     if (!list.length) return '<span class="bad">kein Vorschlag</span>';
     return list.map(function (c) { return c === exp ? '<span class="ok">' + esc(c) + " ✓</span>" : esc(c); }).join(", ");
   }
+  // Urteil: bringen die importierten Fälle etwas?
+  function verdict(r) {
+    var V = {};
+    r.variants.forEach(function (v) { V[v.id] = v; });
+    var reg = V.regeln, strict = r.nearDup >= Math.max(3, 0.05 * r.tested) && V.gelernt_streng;
+    var gel = strict ? V.gelernt_streng : V.gelernt;
+    if (!reg || !gel || !r.tested) return { cls: "", html: "", worse: false };
+    var a = Math.round(100 * reg.top3 / reg.n), b = Math.round(100 * gel.top3 / gel.n);
+    var fixed = 0, broken = 0;
+    (r.errors || []).forEach(function (x) {
+      var inR = x.regeln.indexOf(x.c) !== -1, inG = x.gelernt.indexOf(x.c) !== -1;
+      if (inG && !inR) fixed++; else if (inR && !inG) broken++;
+    });
+    var cmp = " (richtige Klassifizierung unter den 3 Vorschlägen: " + b + " % statt " + a + " %)";
+    var counts = strict ? "" : ": " + fmt(fixed) + " Fälle neu richtig, " + fmt(broken) + " neu falsch";
+    if (r.tested < 50) return { cls: "", html: "Nur " + fmt(r.tested) + " Fälle getestet – zu wenige für eine Aussage. Für ein verlässliches Ergebnis mindestens 200 Fälle laden, am besten mehrere pro Klassifizierung.", worse: false };
+    var caveat = r.tested < 200 ? " Mit nur " + fmt(r.tested) + " getesteten Fällen kann das Ergebnis noch schwanken." : "";
+    if (b >= a + 2) return { cls: "good", html: "<b>Die importierten Fälle machen das Tool besser</b>" + counts + cmp + ". Übernehmen lohnt sich." + caveat, worse: false };
+    if (b <= a - 2) return { cls: "bad", html: "<b>Mit diesen Fällen würde das Tool schlechter</b>" + counts + cmp + ". Besser nicht als gelernte Fälle übernehmen." + caveat, worse: true, a: a, b: b };
+    return { cls: "", html: "<b>Kaum Unterschied</b> mit oder ohne die importierten Fälle" + cmp + "." + caveat, worse: false };
+  }
+
   function renderEval() {
     var r = imp.result, V = {}, html = "";
     if (!r) return;
+    // offene Abschnitte merken, damit sie nach dem Neuzeichnen offen bleiben
+    var open = {};
+    Array.prototype.forEach.call($("evalOut").querySelectorAll("details[data-k]"), function (d) { open[d.getAttribute("data-k")] = d.open; });
+    function det(k, summary, body) { return '<details data-k="' + k + '"' + (open[k] ? " open" : "") + "><summary>" + summary + "</summary>" + body + "</details>"; }
     r.variants.forEach(function (v) { V[v.id] = v; });
-    var sk = [];
-    if (r.skipped.zuWenigText) sk.push(fmt(r.skipped.zuWenigText) + " mit zu wenig Text");
-    if (r.skipped.unbekannterCode) sk.push(fmt(r.skipped.unbekannterCode) + " mit unbekanntem Code");
-    html += "<h3>Ergebnis</h3><p class=\"note\">Getestet: <b>" + fmt(r.tested) + (r.tested === 1 ? " Fall" : " Fälle") + "</b>" +
-      (r.sampleEvery > 1 ? " (jeder " + r.sampleEvery + ". von " + fmt(r.usable) + " Fällen, damit es schneller geht)" : "") +
-      (sk.length ? " · nicht getestet: " + sk.join(", ") : "") + "</p>";
+    var info = [];
+    if (r.sampleEvery > 1) info.push("jeder " + r.sampleEvery + ". von " + fmt(r.usable) + " Fällen, damit es schneller geht");
+    if (r.zuKurzZumLernen) info.push(fmt(r.zuKurzZumLernen) + " sehr kurze Notizen: getestet, aber zu kurz zum Lernen");
+    if (r.skipped.leer) info.push("nicht getestet: " + fmt(r.skipped.leer) + " ohne verwertbaren Text");
+    if (r.skipped.unbekannterCode) info.push("nicht getestet: " + fmt(r.skipped.unbekannterCode) + " mit unbekanntem Code");
+    html += "<h3>Ergebnis</h3><p class=\"note\">Getestet: <b>" + fmt(r.tested) + (r.tested === 1 ? " Fall" : " Fälle") + "</b>" + (info.length ? " (" + info.join(" · ") + ")" : "") + ".</p>";
+    function cell(a, n) { return pct(a, n) + ' <span class="faint">(' + fmt(a) + " von " + fmt(n) + ")</span>"; }
     function row(v, main) {
-      return "<tr" + (main ? ' class="main"' : "") + "><td>" + esc(v.name) + '</td><td class="num">' + pct(v.top1, v.n) +
-        '</td><td class="num">' + pct(v.top3, v.n) + '</td><td class="num">' + pct(v.none, v.n) + "</td></tr>";
+      return "<tr" + (main ? ' class="main"' : "") + "><td>" + esc(v.name) + '</td><td class="num">' + cell(v.top1, v.n) +
+        '</td><td class="num">' + cell(v.top3, v.n) + '</td><td class="num">' + pct(v.none, v.n) + "</td></tr>";
     }
+    var strict = r.nearDup >= Math.max(3, 0.05 * r.tested);
     var head = '<thead><tr><th>Methode</th><th class="num">Richtig auf Platz 1</th><th class="num">Richtig unter den 3 Vorschlägen</th><th class="num">Kein Vorschlag</th></tr></thead>';
-    html += '<div class="scroll"><table class="tbl">' + head + "<tbody>" + (V.regeln ? row(V.regeln, true) : "") + (V.gelernt ? row(V.gelernt, true) : "") + "</tbody></table></div>";
-    html += '<p class="note">„Nur Stichwörter“ = so gut ist das Tool heute ohne gelernte Fälle. „Mit importierten Fällen“ = so gut wäre es, wenn alle diese Fälle gelernt sind. ' +
-      "Dafür wird jeder Fall wie ein neuer Fall getestet: er selbst und Fälle mit genau gleichem Text zählen dabei nicht. Deine bisher gelernten Fälle werden beim Test nicht verwendet.</p>";
-    var others = r.variants.filter(function (v) { return v.id !== "regeln" && v.id !== "gelernt"; });
-    if (others.length) html += "<details><summary>Weitere Varianten (zur Feinabstimmung)</summary><div class=\"scroll\"><table class=\"tbl\">" + head + "<tbody>" +
-      others.map(function (v) { return row(v, false); }).join("") + "</tbody></table></div></details>";
+    html += '<div class="scroll"><table class="tbl">' + head + "<tbody>" + (V.regeln ? row(V.regeln, true) : "") + (V.gelernt ? row(V.gelernt, true) : "") +
+      (strict && V.gelernt_streng ? row(V.gelernt_streng, true) : "") + "</tbody></table></div>";
+    var vd = verdict(r);
+    if (vd.html) html += '<p class="verdict ' + vd.cls + '">' + vd.html + "</p>";
+    html += '<p class="note">„Nur Stichwörter“ = so gut ist das Tool heute, ohne gelernte Fälle. „Mit importierten Fällen“ = so gut wäre es, wenn diese Fälle gelernt sind. ' +
+      "Dafür wird jeder Fall wie ein neuer Fall getestet: er selbst und Fälle mit genau gleichem Text werden dabei nicht als Vorlage verwendet" +
+      (r.sameText ? " (" + fmt(r.sameText) + " Fälle haben einen Doppelgänger mit gleichem Text)" : "") + ". Deine bisher gelernten Fälle werden beim Test nicht verwendet.</p>";
+    if (strict) html += '<p class="note">Bei ' + fmt(r.nearDup) + " Fällen gibt es in der Datei einen fast gleichen Text (z.B. dieselbe Nachricht zweimal). Das kann „Mit importierten Fällen“ zu gut aussehen lassen – die Zeile „ohne fast gleiche Texte“ ist die vorsichtige Schätzung.</p>";
+    var others = r.variants.filter(function (v) { return v.id !== "regeln" && v.id !== "gelernt" && !(strict && v.id === "gelernt_streng"); });
+    if (others.length) html += det("var", "Technische Varianten (für die Weiterentwicklung des Tools)",
+      '<p class="note">Diese Varianten kann man im Tool nicht einstellen. Sie zeigen, welche Einstellung mit deinen Fällen am besten wäre – das steht auch im Bericht.</p>' +
+      '<div class="scroll"><table class="tbl">' + head + "<tbody>" + others.map(function (v) { return row(v, false); }).join("") + "</tbody></table></div>");
 
     // Pro Klassifizierung
     var pc = imp.codesAll ? r.perCode : r.perCode.slice(0, 40);
-    html += "<details" + (imp.codesAll ? " open" : "") + "><summary>Pro Klassifizierung (" + fmt(r.perCode.length) + ")</summary><div class=\"scroll\"><table class=\"tbl\"><thead><tr>" +
-      '<th>Klassifizierung</th><th class="num">Fälle</th><th class="num">Stichwörter<br>Platz 1 / Top 3</th><th class="num">Mit Fällen<br>Platz 1 / Top 3</th><th>Oft stattdessen auf Platz 1</th></tr></thead><tbody>' +
+    html += det("codes", "Pro Klassifizierung (" + fmt(r.perCode.length) + ")", '<div class="scroll"><table class="tbl"><thead><tr>' +
+      '<th>Klassifizierung</th><th class="num">Fälle</th><th class="num">Nur Stichwörter<br>Platz 1 / unter 3</th><th class="num">Mit Fällen<br>Platz 1 / unter 3</th><th>Oft stattdessen auf Platz 1</th></tr></thead><tbody>' +
       pc.map(function (p) {
         return "<tr><td>" + codeHtml(p.code) + '</td><td class="num">' + fmt(p.n) + '</td><td class="num">' + pct(p.regeln.top1, p.n) + " / " + pct(p.regeln.top3, p.n) +
           '</td><td class="num">' + pct(p.gelernt.top1, p.n) + " / " + pct(p.gelernt.top3, p.n) + "</td><td>" +
           (p.wrong || []).map(function (w) { return "<code>" + esc(w[0]) + "</code> (" + fmt(w[1]) + "×)"; }).join(", ") + "</td></tr>";
       }).join("") + "</tbody></table></div>" +
-      (!imp.codesAll && r.perCode.length > 40 ? '<button class="btn" type="button" data-ev="codes">Alle ' + fmt(r.perCode.length) + " anzeigen</button>" : "") + "</details>";
+      (!imp.codesAll && r.perCode.length > 40 ? '<button class="btn" type="button" data-ev="codes">Alle ' + fmt(r.perCode.length) + " anzeigen</button>" : ""));
 
     // Verwechslungen
     function confTable(list) {
@@ -2614,56 +3052,67 @@ var Table = (function () {
           return "<tr><td>" + codeHtml(x.exp) + "</td><td>" + (x.got === "-" ? '<span class="bad">kein Vorschlag</span>' : codeHtml(x.got)) + '</td><td class="num">' + fmt(x.n) + "</td></tr>";
         }).join("") + "</tbody></table></div>";
     }
-    html += "<details><summary>Häufigste Verwechslungen</summary><p class=\"note\"><b>Nur Stichwörter:</b></p>" + confTable(r.confusions.regeln) +
-      "<p class=\"note\"><b>Mit importierten Fällen:</b></p>" + confTable(r.confusions.gelernt) + "</details>";
+    html += det("conf", "Häufigste Verwechslungen", "<p class=\"note\"><b>Nur Stichwörter:</b></p>" + confTable(r.confusions.regeln) +
+      "<p class=\"note\"><b>Mit importierten Fällen:</b></p>" + confTable(r.confusions.gelernt));
 
     // Fehlgriffe (nur lokal sichtbar)
     var errs = r.errors || [];
-    html += "<details" + (imp.errN > 25 ? " open" : "") + "><summary>Fehlgriffe ansehen (" + fmt(errs.length) + ") – nur hier sichtbar, nicht im Bericht</summary>" +
-      '<p class="note">Fälle, bei denen die richtige Klassifizierung nicht unter den 3 Vorschlägen war (mit Stichwörtern oder mit Fällen). „Im Feld öffnen“ zeigt den Fall oben im Eingabefeld.</p>' +
+    html += det("err", "Fehlgriffe ansehen (" + fmt(errs.length) + ") – nur hier sichtbar, nicht im Bericht",
+      '<p class="note">Fälle, bei denen die richtige Klassifizierung nicht unter den 3 Vorschlägen war (nur Stichwörter oder mit Fällen). „Im Feld öffnen“ zeigt den Fall oben im Eingabefeld – wenn du dort einen Code kopierst, lernt das Tool den Fall wie sonst auch.</p>' +
       errs.slice(0, imp.errN).map(function (x) {
         var cs = imp.cases[x.i];
-        return '<div class="errcase"><b>Fall ' + fmt(x.i + 1) + "</b> · richtig wäre " + codeHtml(x.c) +
+        return '<div class="errcase"><b>Zeile ' + fmt(cs ? cs.line : x.i + 1) + "</b> · richtig wäre " + codeHtml(x.c) +
           '<button class="btn" type="button" data-ev="open" data-i="' + x.i + '">Im Feld öffnen</button>' +
-          "<br>Stichwörter: " + codesHtml(x.regeln, x.c) + " · Mit Fällen: " + codesHtml(x.gelernt, x.c) +
+          "<br>Nur Stichwörter: " + codesHtml(x.regeln, x.c) + " · Mit Fällen: " + codesHtml(x.gelernt, x.c) +
           '<div class="et">' + esc(snippet(cs ? Engine.prepare(cs.t).cleaned : "", 300)) + "</div></div>";
       }).join("") +
-      (errs.length > imp.errN ? '<button class="btn" type="button" data-ev="moreErr">25 weitere anzeigen</button>' : "") + "</details>";
+      (errs.length > imp.errN ? '<button class="btn" type="button" data-ev="moreErr">25 weitere anzeigen</button>' : ""));
 
     // Wörter
     var W = r.words || [];
-    html += "<details><summary>Häufige Wörter je Klassifizierung (" + fmt(W.length) + ") – kommen in den Bericht</summary>" +
-      '<p class="note">Wörter, die in mindestens 5 Fällen einer Klassifizierung vorkommen. <b>Fett</b> = noch nicht in den Stichwörtern dieser Klassifizierung.</p>' +
-      (W.length ? W.map(function (x) {
-        return '<p class="words">' + codeHtml(x.code) + " (" + fmt(x.n) + " Fälle): " + x.words.map(function (w) {
-          return '<span class="' + (w[2] ? "known" : "new") + '">' + esc(w[0]) + "</span> (" + fmt(w[1]) + ")";
-        }).join(", ") + "</p>";
-      }).join("") : '<p class="note">Zu wenige Fälle je Klassifizierung.</p>') + "</details>";
+    html += det("words", "Häufige Wörter je Klassifizierung (" + fmt(W.length) + ")",
+      '<p class="note">Wörter, die in mindestens 5 Fällen einer Klassifizierung vorkommen. <b>Fett</b> = noch nicht in den Stichwörtern dieser Klassifizierung – damit lassen sich die Stichwörter gezielt verbessern.</p>' +
+      (W.length ? '<label class="check"><input type="checkbox" data-ev="wordsOn"' + (imp.wordsOn ? " checked" : "") + "> Diese Wörter in den Bericht aufnehmen</label>" +
+        '<p class="note">Vorher durchsehen: Namen von Kunden, Kolleginnen und Kollegen, Firmen oder Orten gehören nicht in den Bericht. Auf ein Wort klicken, um es wegzulassen.</p>' +
+        W.map(function (x) {
+          return '<p class="words">' + codeHtml(x.code) + " (" + fmt(x.n) + " Fälle): " + x.words.map(function (w) {
+            var off = imp.wordsOff[w[0]];
+            return '<button type="button" class="wx ' + (w[2] ? "known" : "new") + (off ? " off" : "") + '" data-ev="word" data-w="' + esc(w[0]) + '" title="' + (off ? "Wieder aufnehmen" : "Weglassen") + '">' + esc(w[0]) + "</button> (" + fmt(w[1]) + ")";
+          }).join(", ") + "</p>";
+        }).join("") : '<p class="note">Zu wenige Fälle je Klassifizierung (es braucht mindestens 5 pro Klassifizierung).</p>'));
 
     // Bericht
     var rep = JSON.stringify(buildReport(r), null, 1);
-    html += '<h3>Bericht</h3><p class="note">Der Bericht enthält nur Zahlen, Codes, Stichwort-Regeln und Wörter, die in mindestens 5 Fällen vorkommen – <b>keine Kundentexte</b>. ' +
-      "Er kann weitergegeben werden, damit die Stichwörter gezielt verbessert werden. Bitte vorher kurz durchsehen.</p>" +
-      '<div class="btnrow"><button class="btn primary" type="button" data-ev="report">Bericht exportieren (ohne Kundentexte)</button></div>' +
-      '<details><summary>Bericht ansehen</summary><pre class="report">' + esc(rep) + "</pre></details>";
+    html += '<h3>Bericht</h3><p class="note">Der Bericht enthält Zahlen, Codes und die Stichwort-Regeln, die falsche Vorschläge ausgelöst haben – <b>keine Kundentexte</b>' +
+      (imp.wordsOn ? ", dazu die häufigen Wörter, die du oben ausgewählt hast" : "") + ". Er ist für die Person gedacht, die das Tool betreut, damit sie die Stichwörter gezielt verbessern kann. Bitte vor dem Weitergeben unter „Bericht ansehen“ durchsehen.</p>" +
+      '<div class="btnrow"><button class="btn primary" type="button" data-ev="report">Bericht exportieren</button></div>' +
+      det("rep", "Bericht ansehen", '<pre class="report">' + esc(rep) + "</pre>");
     $("evalOut").innerHTML = html;
   }
 
   function buildReport(r) {
     var res = imp.res || { total: 0, cases: [], noCode: 0, noText: 0, unknown: [] };
+    // Nur Werte, die wie Codes aussehen – sonst könnte hier Freitext aus einer falsch gewählten Spalte landen
+    var codeLike = res.unknown.filter(function (u) { return /^\s*\d{3,6}\b/.test(u[0]) && String(u[0]).length <= 40; });
+    var words = !imp.wordsOn ? undefined : (r.words || []).map(function (x) {
+      return { code: x.code, n: x.n, words: x.words.filter(function (w) { return !imp.wordsOff[w[0]]; }) };
+    }).filter(function (x) { return x.words.length; });
     return {
-      app: "Fall-Klassifizierung", typ: "Auswertung", version: 1, erstellt: new Date().toISOString().slice(0, 10),
-      hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes, Stichwort-Regeln und Wörter aus mindestens 5 Fällen.",
+      app: "Fall-Klassifizierung", typ: "Auswertung", version: 2, erstellt: new Date().toISOString().slice(0, 10),
+      hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes und Stichwort-Regeln" + (words ? " sowie ausgewählte Wörter aus mindestens 5 Fällen" : "") + ".",
       quelle: { format: imp.format, zeilen: res.total, faelle: res.cases.length, ohneCode: res.noCode, ohneText: res.noText,
-        nichtErkannteCodes: res.unknown.map(function (u) { return [snippet(u[0], 40), u[1]]; }) },
-      test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped },
+        summenzeilen: res.subtotal || 0, ausZeileDarueber: res.filled || 0,
+        nichtErkannteCodes: codeLike.map(function (u) { return [snippet(u[0], 40), u[1]]; }),
+        andereNichtErkannte: res.unknown.length - codeLike.length },
+      test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped,
+        zuKurzZumLernen: r.zuKurzZumLernen, gleicherText: r.sameText, fastGleicherText: r.nearDup },
       methoden: r.variants.map(function (v) {
         return { id: v.id, name: v.name, n: v.n, top1: v.top1, top3: v.top3, keinVorschlag: v.none, top1Prozent: pct(v.top1, v.n), top3Prozent: pct(v.top3, v.n) };
       }),
       proCode: r.perCode,
       verwechslungen: r.confusions,
       ausloeser: r.triggers,
-      woerter: r.words
+      woerter: words
     };
   }
 
@@ -2673,45 +3122,72 @@ var Table = (function () {
     var what = b.getAttribute("data-ev");
     if (what === "codes") { imp.codesAll = true; renderEval(); }
     else if (what === "moreErr") { imp.errN += 25; renderEval(); }
+    else if (what === "word") { var w = b.getAttribute("data-w"); imp.wordsOff[w] = !imp.wordsOff[w]; renderEval(); }
     else if (what === "open") {
       var cs = imp.cases && imp.cases[parseInt(b.getAttribute("data-i"), 10)];
       if (!cs) return;
       q.value = cs.t; render(); window.scrollTo(0, 0); q.focus();
+      toast("Zeile " + fmt(cs.line) + " geöffnet – richtig wäre " + full(BY[cs.c]));
     } else if (what === "report" && imp.result) {
       download("fall-klassifizierung-auswertung-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(buildReport(imp.result), null, 1));
     }
   });
+  $("evalOut").addEventListener("change", function (e) {
+    if (e.target.getAttribute("data-ev") === "wordsOn") { imp.wordsOn = e.target.checked; renderEval(); }
+  });
 
   // --- Alle als gelernte Fälle übernehmen
+  var ROOM = 250000;   // so viel Platz bleibt im Browserspeicher frei für Fälle, die man später von Hand lernt
   function trySave(arr) {
     try { window.localStorage.setItem(KEY, JSON.stringify(arr)); return true; } catch (e) { return false; }
   }
+  function saveWithRoom(arr) {
+    if (!trySave(arr)) return false;
+    var probe = KEY + ".platz", ok = true;
+    try { window.localStorage.setItem(probe, new Array(ROOM + 1).join("x")); } catch (e) { ok = false; }
+    try { window.localStorage.removeItem(probe); } catch (e) { /* egal */ }
+    return ok;
+  }
   $("btnLearnAll").addEventListener("click", function () {
     if (!imp.res || !imp.res.cases.length) return;
-    var seen = {}, add = [], today = new Date().toISOString().slice(0, 10);
+    var seen = {}, byCode = {}, order = [], today = new Date().toISOString().slice(0, 10), n0 = 0;
     learned.forEach(function (e) { seen[e.c + "\u0001" + e.t] = 1; });
     imp.res.cases.forEach(function (x) {
-      var t = Engine.learnable(x.t);
+      var t = learnText(x.t);
       if (!t) return;
-      t = t.slice(0, 800);
       var k = x.c + "\u0001" + t;
       if (seen[k]) return;
-      seen[k] = 1; add.push({ t: t, c: x.c, d: today, s: "import" });
+      seen[k] = 1; n0++;
+      if (!byCode[x.c]) { byCode[x.c] = []; order.push(x.c); }
+      byCode[x.c].push({ t: t, c: x.c, d: today, s: "import" });
     });
-    if (!add.length) { toast("Keine neuen Fälle zum Übernehmen"); return; }
-    if (!window.confirm(fmt(add.length) + " Fälle als gelernte Fälle übernehmen?\nSie werden nur in diesem Browser gespeichert und können unter „Gelernte Fälle“ wieder gelöscht werden.")) return;
+    // abwechselnd nach Klassifizierung ordnen: wenn der Speicher nicht für alle reicht, sind trotzdem alle vertreten
+    var add = [];
+    for (var round = 0; add.length < n0; round++) order.forEach(function (c) { if (byCode[c][round]) add.push(byCode[c][round]); });
+    var skipped = imp.res.cases.length - add.length;
+    if (!add.length) { toast("Keine neuen Fälle zum Übernehmen (zu kurz zum Lernen oder schon gelernt)"); return; }
+    var msg = fmt(add.length) + " von " + fmt(imp.res.cases.length) + " Fällen als gelernte Fälle übernehmen?" +
+      (skipped ? " (" + fmt(skipped) + " sind zu kurz zum Lernen oder schon gelernt.)" : "") +
+      "\nSie werden nur in diesem Browser gespeichert und können unter „Gelernte Fälle“ mit „Importierte löschen“ wieder entfernt werden.";
+    if (!imp.result) msg = "Tipp: zuerst „Genauigkeit testen“ – dann siehst du, ob die Fälle die Vorschläge verbessern.\n\n" + msg;
+    else {
+      var vd = verdict(imp.result);
+      if (vd.worse) msg = "Achtung: Laut Test wird das Tool mit diesen Fällen schlechter (unter den 3 Vorschlägen: " + vd.b + " % statt " + vd.a + " %).\nTrotzdem übernehmen?\n\n" + msg;
+    }
+    if (!window.confirm(msg)) return;
     var base = learned.slice(), n = add.length;
-    storageOk = trySave(base);                                      // false: Speichern gar nicht möglich, nur bis zum Schliessen
-    if (storageOk && !trySave(base.concat(add))) {                  // Speicher voll: so viele wie möglich
+    storageOk = trySave(base);                                    // false: Speichern gar nicht möglich, nur bis zum Schliessen
+    if (storageOk && !saveWithRoom(base.concat(add))) {           // zu wenig Platz: so viele wie möglich, mit Reserve
       var lo = 0, hi = add.length - 1;
-      while (lo < hi) { var mid = Math.ceil((lo + hi) / 2); if (trySave(base.concat(add.slice(0, mid)))) lo = mid; else hi = mid - 1; }
+      while (lo < hi) { var mid = Math.ceil((lo + hi) / 2); if (saveWithRoom(base.concat(add.slice(0, mid)))) lo = mid; else hi = mid - 1; }
       n = lo; trySave(base.concat(add.slice(0, n)));
     }
     learned = base.concat(add.slice(0, n));
     reindex(); render();
-    if (!storageOk) toast(fmt(n) + " Fälle übernommen – aber nur bis zum Schliessen (Browser speichert nicht)");
-    else if (n < add.length) toast("Browserspeicher voll: nur " + fmt(n) + " von " + fmt(add.length) + " Fällen übernommen");
-    else toast(fmt(n) + " Fälle übernommen");
+    if (!storageOk) impWarn(fmt(n) + " Fälle übernommen – aber der Browser speichert hier nicht: sie gehen beim Schliessen verloren.");
+    else if (n < add.length) impWarn("Browserspeicher zu klein: nur " + fmt(n) + " von " + fmt(add.length) + " Fällen übernommen (gleichmässig über alle Klassifizierungen verteilt). Etwas Platz bleibt frei für Fälle, die du von Hand lernst.");
+    else impWarn("");
+    toast(fmt(n) + (n === 1 ? " Fall" : " Fälle") + " übernommen");
   });
 
   reindex();

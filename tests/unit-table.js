@@ -179,7 +179,7 @@ check('Trennzeichen |, Vorrang bei Gleichstand, Anführungszeichen beachtet', ()
 });
 check('Felder: Text wie geliefert, " mitten im Feld, leeres letztes Feld', () => {
   eq(T.parseDelimited(' a ;5" Bild;\n"x"y;;z', ';'), [[' a ', '5" Bild', ''], ['xy', '', 'z']]);
-  eq(T.parseDelimited('"offen;ohne Ende\nweiter', ';'), [['offen;ohne Ende\nweiter']]);
+  eq(T.parseDelimited('"offen;mit Ende\nweiter" ;x', ';'), [['offen;mit Ende\nweiter ', 'x']]);
   eq(T.parseDelimited('﻿a;b'), [['a', 'b']]);
 });
 
@@ -224,7 +224,7 @@ check('xlsx: ausgeblendetes erstes Blatt wird übersprungen', async () => {
     { name: 'xl/worksheets/sheet1.xml', data: sheet('<row r="1"><c r="A1"><v>1</v></c></row>') },
     { name: 'xl/worksheets/sheet2.xml', data: sheet('<row r="1"><c r="A1"><v>2</v></c></row>') }]);
   const x = await T.readXlsx(z);
-  eq(x.sheet, 'Sicht>bar'); eq(x.rows, [['2']]); eq(x.sheets, ['Versteckt', 'Sicht>bar']);
+  eq(x.sheet, 'Sicht>bar'); eq(x.rows, [['2']]); eq(x.sheets, ['Sicht>bar']); eq(x.sheetIndex, 0);
 });
 check('xlsx: nicht unterstützte ZIP-Dateien -> Fehler ZIP', async () => {
   const s = sheet('<row r="1"><c r="A1"><v>1</v></c></row>');
@@ -296,19 +296,20 @@ const MIT_KOPF = T.parseDelimited([
   'Leer;;50410;kunde.g@example.com',
 ].join('\n'));
 check('guess: Kopfzeile Betreff;Beschreibung;Klassifizierung;E-Mail', () =>
-  eq(T.guess(MIT_KOPF, resolve), { header: true, codeCol: 2, textCols: [0, 1] }));
+  eq(T.guess(MIT_KOPF, resolve), { headerRow: 0, codeCol: 2, textCols: [0, 1], fillDown: false }));
 check('toCases: Texte zusammengefügt, ohne Code, unbekannte Codes, ohne Text', () => {
   const r = T.toCases(MIT_KOPF, T.guess(MIT_KOPF, resolve), resolve);
   eq(r.cases, [
-    { t: 'Fotobuch nicht erhalten\nDie Bestellung ist seit drei Wochen unterwegs, Tracking zeigt nichts Neues', c: '50410', row: 1 },
-    { t: 'Tasse kaputt\nHenkel war beim Auspacken abgebrochen, Karton eingedrückt', c: '517', row: 2 },
-    { t: 'Rechnung\nRechnung zweimal erhalten und beide bezahlt, bitte Geld zurück', c: '50104', row: 3 },
-    { t: 'Gutscheincode wird im Warenkorb nicht akzeptiert', c: '20709', row: 4 },
-    { t: 'Leer', c: '50410', row: 7 },
+    { t: 'Fotobuch nicht erhalten\nDie Bestellung ist seit drei Wochen unterwegs, Tracking zeigt nichts Neues', c: '50410', row: 1, line: 2 },
+    { t: 'Tasse kaputt\nHenkel war beim Auspacken abgebrochen, Karton eingedrückt', c: '517', row: 2, line: 3 },
+    { t: 'Rechnung\nRechnung zweimal erhalten und beide bezahlt, bitte Geld zurück', c: '50104', row: 3, line: 4 },
+    { t: 'Gutscheincode wird im Warenkorb nicht akzeptiert', c: '20709', row: 4, line: 5 },
+    { t: 'Leer', c: '50410', row: 7, line: 8 },
   ]);
-  eq([r.total, r.noCode, r.noText], [7, 2, 0]);
+  eq([r.total, r.noCode, r.noText, r.subtotal, r.groupRows, r.filled], [7, 2, 0, 0, 0, 0]);
   eq(r.unknown, [['77777', 1]]);
-  const r2 = T.toCases(MIT_KOPF, { header: true, codeCol: 2, textCols: [1] }, resolve);
+  eq(r.textColsWithCodes, []);
+  const r2 = T.toCases(MIT_KOPF, { headerRow: 0, codeCol: 2, textCols: [1] }, resolve);
   eq([r2.cases.length, r2.noText, r2.noCode], [4, 1, 2]);
 });
 check('guess: ohne Kopfzeile, Datum und Telefon werden nicht als Text genommen', () => {
@@ -318,9 +319,9 @@ check('guess: ohne Kopfzeile, Datum und Telefon werden nicht als Text genommen',
     ['2026-01-07', '+41 00 000 00 03', 'Wo bleibt meine Leinwand? Schon zwei Wochen', '50410'],
     ['2026-01-08', '', 'Newsletter abmelden bitte', '50601'],
   ];
-  eq(T.guess(rows, resolve), { header: false, codeCol: 3, textCols: [2] });
+  eq(T.guess(rows, resolve), { headerRow: -1, codeCol: 3, textCols: [2], fillDown: false });
   const r = T.toCases(rows, T.guess(rows, resolve), resolve);
-  eq([r.total, r.cases.length, r.cases[0].row, r.cases[0].c], [4, 4, 0, '50104']);
+  eq([r.total, r.cases.length, r.cases[0].row, r.cases[0].line, r.cases[0].c], [4, 4, 0, 1, '50104']);
 });
 check('guess: Code-Spalte nur mit Bezeichnungen', () => {
   const rows = T.parseDelimited('Fall\tKategorie\n' +
@@ -329,7 +330,7 @@ check('guess: Code-Spalte nur mit Bezeichnungen', () => {
     'Neue Wohnadresse ab nächstem Monat\tAdressänderung\n' +
     'Seite im Buch ist eingerissen\tHerstellung mech. Beschädigung Seite eingerissen\n');
   const g = T.guess(rows, resolve);
-  eq(g, { header: true, codeCol: 1, textCols: [0] });
+  eq(g, { headerRow: 0, codeCol: 1, textCols: [0], fillDown: false });
   eq(T.toCases(rows, g, resolve).cases.map(c => c.c), ['50410', '50702', '6102', '342']);
 });
 check('guess: Kopfzeile mit Kundennr/Telefon/Datum, unbekannte Codes (Top 10)', () => {
@@ -338,7 +339,7 @@ check('guess: Kopfzeile mit Kundennr/Telefon/Datum, unbekannte Codes (Top 10)', 
   for (let i = 0; i < 90; i++) lines.push(`03.03.2026;${200000 + i};+41 00 000 11 ${10 + (i % 80)};Tracking seit Tagen ohne Bewegung;50407`);
   const rows = T.parseDelimited(lines.join('\r\n'));
   const g = T.guess(rows, resolve);
-  eq(g, { header: true, codeCol: 4, textCols: [3] });
+  eq(g, { headerRow: 0, codeCol: 4, textCols: [3], fillDown: false });
   const r = T.toCases(rows, g, resolve);
   eq([r.total, r.cases.length, r.noCode], [78 + 90, 90, 78]);
   eq(r.unknown.length, 10);
@@ -348,29 +349,284 @@ check('guess: Zusatzspalte Betreff nur mit Kopfzeile, Bearbeiter ausgeschlossen'
   const rows = T.parseDelimited('Nachricht,Bearbeiter,Klassifizierung,Titel\n' +
     '"Guten Tag, mein Fotobuch ist nicht angekommen",Agent Muster,50410,Nicht erhalten\n' +
     '"Die Tasse hat einen Sprung, bitte Ersatz",Agent Muster,517,Tasse\n');
-  eq(T.guess(rows, resolve), { header: true, codeCol: 2, textCols: [0, 3] });
+  eq(T.guess(rows, resolve), { headerRow: 0, codeCol: 2, textCols: [0, 3], fillDown: false });
 });
 check('guess: ohne Code-Spalte, leere Tabelle, eine Zeile', () => {
   const rows = T.parseDelimited('Datum;Notiz\n01.02.2026;Kunde ruft wegen Lieferung an\n02.02.2026;Frage zur Rechnung, bitte zurückrufen');
   const g = T.guess(rows, resolve);
-  eq(g, { header: true, codeCol: -1, textCols: [1] });
+  eq(g, { headerRow: 0, codeCol: -1, textCols: [1], fillDown: false });
   const r = T.toCases(rows, g, resolve);
   eq([r.total, r.noCode, r.noText, r.cases.length, r.unknown.length], [2, 2, 0, 0, 0]);
-  eq(T.guess([], resolve), { header: false, codeCol: -1, textCols: [] });
-  eq(T.guess([['Fotobuch nicht erhalten, Tracking offen', '50407']], resolve), { header: false, codeCol: 1, textCols: [0] });
+  eq(T.guess([], resolve), { headerRow: -1, codeCol: -1, textCols: [], fillDown: false });
+  eq(T.guess([['Fotobuch nicht erhalten, Tracking offen', '50407']], resolve), { headerRow: -1, codeCol: 1, textCols: [0], fillDown: false });
 });
 check('guess: erste Datenzeile mit unbekanntem Code ist keine Kopfzeile', () => {
   const rows = [['Kunde bekam das falsche Paket mit fremden Fotos', '99999'], ['Fotobuch kam zu spät, Geburtstag verpasst', '50410'],
     ['Leinwand mit Kratzer geliefert', '362']];
-  eq(T.guess(rows, resolve), { header: false, codeCol: 1, textCols: [0] });
+  eq(T.guess(rows, resolve), { headerRow: -1, codeCol: 1, textCols: [0], fillDown: false });
 });
 check('Ende-zu-Ende: CSV-Bytes (windows-1252) -> Fälle', async () => {
   const csv = Buffer.from('Beschreibung;Klassifizierung\r\n"Paket nie angekommen;\r\nPost sagt zugestellt";514\r\nKäse;?\r\n', 'latin1');
   const x = await T.read(csv, 'export.csv');
   const g = T.guess(x.rows, resolve);
   const r = T.toCases(x.rows, g, resolve);
-  eq(r.cases, [{ t: 'Paket nie angekommen;\nPost sagt zugestellt', c: '514', row: 1 }]);
+  eq(r.cases, [{ t: 'Paket nie angekommen;\nPost sagt zugestellt', c: '514', row: 1, line: 2 }]);
   eq(r.unknown, [['?', 1]]);
+});
+
+/* ---------- Korrekturen nach der Durchsicht (T1–T14); alle Daten erfunden ---------- */
+const NOTIZEN = [['FB n. erh.', '50410'], ['RE n. erh.', '50114'], ['AB fehlt', '20801'], ['Seiten lose', '315'], ['GS Code ungültig', '20709'], ['LW Delle', '517']];
+const NAMEN = ['Anna Beispiel', 'Beat Muster', 'Carla Test', 'Daniel Probe'];
+const MAILS = ['Guten Tag, mein Fotobuch ist seit drei Wochen nicht angekommen. Bitte prüfen Sie das.',
+  'Die Rechnung habe ich nie per E-Mail bekommen, können Sie sie nochmals senden?',
+  'Ich habe keine Auftragsbestätigung erhalten, ist die Bestellung angekommen?',
+  'Nach zwei Tagen lösen sich die Seiten aus dem Buch, das ist sehr ärgerlich.'];
+const CODES4 = ['50410', '50114', '20801', '315'];
+// Tabelle aus Kopfzeile und n Zeilen (f(i) -> Zeile)
+const table = (head, n, f) => { const r = head ? [head] : []; for (let i = 0; i < n; i++) r.push(f(i)); return r; };
+const tc = (rows, g) => T.toCases(rows, g || T.guess(rows, resolve), resolve);
+
+check('T1: Haupttext nach Wörtern: kurze Notizen statt Namen, Links, E-Mails, Prüfsummen', () => {
+  const notiz = i => NOTIZEN[i % NOTIZEN.length];
+  // ohne Kopfzeile: Namen (2 Wörter) gegen Notizen wie „FB n. erh.“
+  let rows = table(null, 30, i => [NAMEN[i % 4], notiz(i)[0], notiz(i)[1]]);
+  eq(T.guess(rows, resolve), { headerRow: -1, codeCol: 2, textCols: [1], fillDown: false });
+  // Link, E-Mail-Adresse, GUID und Prüfsumme sind nie Text, auch ohne Kopfzeile
+  rows = table(null, 30, i => ['https://crm.example.com/fall/' + (1000 + i) + '?ansicht=voll&x=1', 'kunde' + i + '@example.com',
+    '3f2504e0-4f89-11d3-9a0c-0305e82c33' + String(10 + i), 'dGVzdGRhdGVuMTIzNDU2Nzg5MA' + i + 'x==', notiz(i)[0], notiz(i)[1]]);
+  eq(T.guess(rows, resolve).textCols, [4]);
+  // mehrere Wörter, aber Absender mit Adresse oder Link mit Zusatz: kein Text; eine Adresse in einer langen Nachricht stört nicht
+  rows = table(null, 30, i => [NAMEN[i % 4] + ' <kunde' + i + '@example.com>', 'https://crm.example.com/fall/' + i + ' (öffnen)',
+    MAILS[i % 4] + ' Gruss, kunde' + i + '@example.com', CODES4[i % 4]]);
+  eq(T.guess(rows, resolve).textCols, [2]);
+  // Kopfzeile „Kunde;Bemerkung“: Bemerkung ist der Text, die Namen nicht
+  rows = table(['Kunde', 'Bemerkung', 'Klassifizierung'], 30, i => [NAMEN[i % 4], notiz(i)[0], notiz(i)[1]]);
+  eq(T.guess(rows, resolve), { headerRow: 0, codeCol: 2, textCols: [1], fillDown: false });
+  eq(tc(rows).cases[0], { t: 'FB n. erh.', c: '50410', row: 1, line: 2 });
+  // Spalte mit langen Zeilen, aber kaum gefüllt (Fusszeilen), wird nicht Haupttext
+  rows = table(['Hinweis', 'Notiz', 'Code'], 40, i => [i % 20 ? '' : 'Dieser Bericht enthält vertrauliche Angaben und ist nur für den internen Gebrauch bestimmt',
+    notiz(i)[0], notiz(i)[1]]);
+  eq(T.guess(rows, resolve).textCols, [1]);
+  // lauter einzelne Wörter (Status, Produkt) sind kein Text
+  rows = table(null, 20, i => [['Offen', 'Erledigt', 'Wartend'][i % 3], notiz(i)[0], notiz(i)[1]]);
+  eq(T.guess(rows, resolve).textCols, [1]);
+});
+
+check('T2: Spalte mit Bezeichnungen (zweite Klassifizierung) ist nie Text', () => {
+  const lab = c => E.byCode[c].label;
+  let rows = table(['Notiz', 'Klassifizierung', 'Klassifizierungstext'], 24, i => ['Kd. ruft an wegen Bestellung (Fall ' + i + ')', CODES4[i % 4], lab(CODES4[i % 4])]);
+  eq(T.guess(rows, resolve).textCols, [0]);
+  rows = table(['Code', 'Bezeichnung', 'Notiz'], 24, i => [CODES4[i % 4], lab(CODES4[i % 4]), NOTIZEN[i % 6][0]]);
+  eq(T.guess(rows, resolve), { headerRow: 0, codeCol: 0, textCols: [2], fillDown: false });
+  rows = table(['Fallnotiz', 'Kategorie', 'Kategorie Beschreibung'], 24, i => [MAILS[i % 4], lab(CODES4[i % 4]), CODES4[i % 4] + ' - ' + lab(CODES4[i % 4])]);
+  eq(T.guess(rows, resolve).textCols, [0]);
+});
+
+check('T3: Titel mit E-Mail/Agent/Datum/Order, aber langem Text, sind Textspalten; Kunde, Absender, Link nicht', () => {
+  for (const h of ['E-Mail-Text', 'Email Body', 'Inhalt der E-Mail', 'Kommentar Agent', 'Agent Notes', 'Updated Description',
+    'Beschreibung (Kundenname entfernt)', 'Order notes', 'Mailtext', 'Mail Text']) {
+    const rows = table(['Betreff', h, 'Klassifizierung'], 20, i => [['Ihre Bestellung', 'Anfrage', 'Reklamation'][i % 3], MAILS[i % 4], CODES4[i % 4]]);
+    eq([h, T.guess(rows, resolve).textCols], [h, [0, 1]]);
+  }
+  for (const h of ['Kunde', 'Kontaktname', 'Absender', 'Von', 'From', 'Account', 'Firma', 'Link', 'URL', 'Checksum']) {
+    const rows = table([h, 'Notiz', 'Klassifizierung'], 20, i => ['Firma Beispiel AG, Abteilung Einkauf ' + i, NOTIZEN[i % 6][0], NOTIZEN[i % 6][1]]);
+    eq([h, T.guess(rows, resolve).textCols], [h, [1]]);
+  }
+  // kurzer „Statustext“ bleibt ausgeschlossen
+  const rows = table(['Statustext', 'Nachricht', 'Code'], 20, i => ['in Arbeit ' + (i % 3), MAILS[i % 4], CODES4[i % 4]]);
+  eq(T.guess(rows, resolve).textCols, [1]);
+});
+
+check('T4: Kopfzeile nicht in Zeile 1 (Titel- und Filterzeilen darüber)', () => {
+  const data = i => ['', '0100' + i, MAILS[i % 4], CODES4[i % 4]];
+  let rows = [['Fälle nach Klassifizierung – Kundenservice', '', '', ''], ['Gefiltert nach: Erstellt am = letzte 12 Monate', '', '', ''],
+    ['', 'Fallnummer', 'Beschreibung', 'Klassifizierung'], ...table(null, 20, data), ['Vertraulich – nur für den internen Gebrauch', '', '', '']];
+  let g = T.guess(rows, resolve);
+  eq(g, { headerRow: 2, codeCol: 3, textCols: [2], fillDown: false });
+  let r = tc(rows, g);
+  eq([r.total, r.cases.length, r.noCode], [21, 20, 1]);
+  eq([r.cases[0].row, r.cases[0].line], [3, 4]);
+  // Titel über alle Spalten (auch über der Klassifizierung, z. B. verbundene Zellen) und Code-Spalte vorne
+  rows = [['Export Fälle', 'Export Fälle', 'Export Fälle'], ['Klassifizierung', 'Kontaktname', 'Notiz'],
+    ...table(null, 12, i => [CODES4[i % 4], NAMEN[i % 4], MAILS[i % 4]])];
+  eq(T.guess(rows, resolve), { headerRow: 1, codeCol: 0, textCols: [2], fillDown: false });
+  // unbekannte Codes vor dem ersten gültigen: die Kopfzeile ist die mit dem Spaltentitel
+  rows = [['Notiz', 'Code'], [MAILS[0], 'Alt-1'], [MAILS[1], 'Alt-2'], ...table(null, 10, i => [MAILS[i % 4], CODES4[i % 4]])];
+  eq(T.guess(rows, resolve).headerRow, 0);
+  // Freitext in der Code-Spalte mitten in den Daten ist keine Kopfzeile
+  rows = [['Notiz', 'Klassifizierung'], [MAILS[0], '50410'], [MAILS[1], 'Rückruf Frau Beispiel'], ...table(null, 10, i => [MAILS[i % 4], CODES4[i % 4]])];
+  eq(T.guess(rows, resolve).headerRow, 0);
+  // ohne Code-Spalte: Kopfzeile nur, wenn Zeile 1 wie Spaltentitel aussieht
+  eq(T.guess([['Datum', 'Notiz', ''], ['01.02.2026', MAILS[0], ''], ['02.02.2026', MAILS[1], '']], resolve).headerRow, 0);
+  eq(T.guess([['01.02.2026', MAILS[0]], ['02.02.2026', MAILS[1]]], resolve).headerRow, -1);
+  eq(T.guess([['Notiz', MAILS[0]], ['Notiz', MAILS[1]]], resolve).headerRow, -1);
+  // toCases: alte Angabe header: true gilt noch als headerRow 0
+  eq(tc(MIT_KOPF, { header: true, codeCol: 2, textCols: [1] }).total, 7);
+});
+
+check('T5: „sep=;“ in der ersten Zeile bestimmt das Trennzeichen und ist keine Zeile', async () => {
+  const txt = 'sep=;\r\nText;Code\r\nRechnung falsch, bitte korrigieren;50103\r\nGutschein, geht nicht;20709\r\n';
+  const rows = T.parseDelimited(txt);
+  eq(rows, [['Text', 'Code'], ['Rechnung falsch, bitte korrigieren', '50103'], ['Gutschein, geht nicht', '20709']]);
+  eq(rows.lineNos, [1, 2, 3]);
+  const x = await T.read(Buffer.from('﻿sep=|\nText|Code\nTasse; kaputt|517\n', 'utf8'), 'x.csv');
+  eq([x.delimiter, x.rows], ['|', [['Text', 'Code'], ['Tasse; kaputt', '517']]]);
+  eq(T.parseDelimited('"sep=,"\na,b\n'), [['a', 'b']]);
+  eq(T.parseDelimited('sep=\na;b\n'), [['sep=', ''], ['a', 'b']]);   // ohne Zeichen: normale Zeile
+});
+
+// kleines .xlsx mit einem Blatt (Zeilen als XML) und optionalem Zusatz nach sheetData
+const xlsx1 = (rowsXml, after = '', sheets = [['Tabelle1']]) => zip([...common,
+  { name: 'xl/workbook.xml', data: workbook(sheets.map((s, i) => [s[0], 'rId' + (i + 1), s[1]])) },
+  { name: 'xl/_rels/workbook.xml.rels', data: rels(sheets.map((s, i) => ['rId' + (i + 1), 'worksheet', 'worksheets/sheet' + (i + 1) + '.xml'])) },
+  ...sheets.map((s, i) => ({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml', data: HEAD + `<worksheet ${NS}><sheetData>${i ? s[2] : rowsXml}</sheetData>${i ? '' : after}</worksheet>` }))]);
+const is = (ref, t) => `<c r="${ref}" t="inlineStr"><is><t>${t}</t></is></c>`;
+
+check('T6: verbundene Zellen (xlsx) und rowspan/colspan (HTML) werden gefüllt', async () => {
+  const x = await T.readXlsx(xlsx1(
+    '<row r="1">' + is('A1', 'Klassifizierung') + is('B1', 'Notiz') + '</row>' +
+    '<row r="2"><c r="A2"><v>50410</v></c>' + is('B2', 'Paket seit Wochen unterwegs') + '</row>' +
+    '<row r="3"><c r="A3" s="1"/>' + is('B3', 'Wo bleibt mein Fotobuch?') + '</row>' +
+    '<row r="4">' + is('B4', 'Tracking ohne Bewegung') + '</row>' +
+    '<row r="5">' + is('A5', 'Summe') + '<c r="B5"><v>3</v></c></row>' +
+    '<row r="6"><c r="A6"><v>517</v></c>' + is('B6', 'Karton nass') + '</row>' +
+    '<row r="7">' + is('B7', 'Ecke eingedrückt') + '</row>' +
+    '<row r="9">' + is('A9', 'Ende der Liste') + '</row>',
+    '<mergeCells count="4"><mergeCell ref="A2:A4"/><mergeCell ref="A6:A8"/><mergeCell ref="A9:C9"/><mergeCell ref="B5:B5"/></mergeCells>'));
+  eq(x.rows, [['Klassifizierung', 'Notiz'], ['50410', 'Paket seit Wochen unterwegs'], ['50410', 'Wo bleibt mein Fotobuch?'],
+    ['50410', 'Tracking ohne Bewegung'], ['Summe', '3'], ['517', 'Karton nass'], ['517', 'Ecke eingedrückt'], ['Ende der Liste', 'Ende der Liste']]);
+  eq(x.rows.lineNos, [1, 2, 3, 4, 5, 6, 7, 9]);
+  const r = tc(x.rows);
+  eq([r.cases.length, r.subtotal, r.noCode, r.cases.map(c => c.c).join()], [5, 1, 1, '50410,50410,50410,517,517']);
+  const h = await T.read(u8('<table><tr><th>Klassifizierung</th><th colspan="2">Text</th></tr>' +
+    '<tr><td rowspan=3>50410 - Lieferverzögerung</td><td>Paket fehlt</td><td rowspan="2">Kunde A</td></tr>' +
+    '<tr><td>Buch nicht da</td></tr><tr><td colspan=2>Wo bleibt es?</td></tr><tr><td>517</td><td>Karton nass</td><td>Kunde B</td></tr></table>'), 'bericht.xls');
+  eq(h.rows, [['Klassifizierung', 'Text', 'Text'], ['50410 - Lieferverzögerung', 'Paket fehlt', 'Kunde A'], ['50410 - Lieferverzögerung', 'Buch nicht da', 'Kunde A'],
+    ['50410 - Lieferverzögerung', 'Wo bleibt es?', 'Wo bleibt es?'], ['517', 'Karton nass', 'Kunde B']]);
+  eq(h.rows.lineNos, [1, 2, 3, 4, 5]);
+});
+
+check('T7: gruppierte Berichte: Klassifizierung nur in der Gruppenzeile, Summenzeilen', () => {
+  // Gruppenzeile mit Code, darunter Fälle ohne Code, danach Zwischensumme
+  const rows = [['Klassifizierung', 'Fallnummer', 'Notiz'],
+    ['50410 - Lieferverzögerung (3)', '', ''], ['', '01', MAILS[0]], ['', '02', 'Paket noch nicht da'], ['', '03', 'Wo bleibt mein Kalender?'], ['Zwischensumme', '3', ''],
+    ['99999 - Alter Code (1)', '', ''], ['', '04', 'Alter Fall ohne gültigen Code'], ['Zwischensumme', '1', ''],
+    ['', '05', 'Fall ohne Gruppe nach der Summe'],
+    ['50114 - Rechnung per E-Mail nicht angekommen (2)', '', ''], ['', '06', MAILS[1]], ['', '07', ''], ['', '08', 'Rechnung fehlt im Postfach'],
+    ['Gesamtsumme', '8', ''], ['Anzahl: 8', '', ''], ['Total', '', '']];
+  const g = T.guess(rows, resolve);
+  eq(g, { headerRow: 0, codeCol: 0, textCols: [2], fillDown: true });
+  const r = tc(rows, g);
+  eq(r.cases.map(c => [c.c, c.row]), [['50410', 2], ['50410', 3], ['50410', 4], ['50114', 11], ['50114', 13]]);
+  eq([r.total, r.cases.length, r.noCode, r.noText, r.subtotal, r.groupRows, r.filled], [16, 5, 3, 1, 5, 2, 5]);
+  eq(r.total, r.cases.length + r.noCode + r.noText + r.subtotal + r.groupRows);
+  eq(r.unknown, [['99999 - Alter Code (1)', 1]]);   // Summenzeilen sind keine unbekannten Codes
+  // ohne fillDown: nur die Summenzeilen werden erkannt
+  const r2 = tc(rows, Object.assign({}, g, { fillDown: false }));
+  eq([r2.cases.length, r2.noCode, r2.noText, r2.subtotal, r2.groupRows, r2.filled], [0, 9, 2, 5, 0, 0]);
+  // Pivot-Stil: Code nur in der ersten Zeile der Gruppe (mit Text)
+  const piv = [['Klassifizierung', 'Notiz'], ['50410', MAILS[0]], ['', 'Paket fehlt'], ['', 'Buch nicht da'], ['50114 Ergebnis', ''], ['517', 'Karton nass'], ['', 'Ecke kaputt']];
+  const gp = T.guess(piv, resolve);
+  eq(gp.fillDown, true);
+  eq(tc(piv, gp).cases.map(c => c.c), ['50410', '50410', '50410', '517', '517']);
+  // Summenzeilen in verschiedenen Schreibweisen (auch ohne fillDown), keine davon ist ein Code
+  const sums = ['Summe', 'Zwischensumme 50410', 'Gesamtsumme', 'Gesamtergebnis', '50410 - Lieferverzögerung Ergebnis', 'Total', 'Subtotal', 'Grand Total', 'Anzahl: 3', 'Count 3', '517 Summe'];
+  const rs = tc([['Notiz', 'Code'], ...sums.map(x => ['', x]), [MAILS[0], '50410']], { headerRow: 0, codeCol: 1, textCols: [0] });
+  eq([rs.total, rs.subtotal, rs.cases.length, rs.noText, rs.unknown], [12, 11, 1, 0, []]);
+  // flache Liste mit wenigen leeren Codes: kein fillDown
+  const flat = table(['Notiz', 'Code'], 20, i => [MAILS[i % 4], i % 5 ? CODES4[i % 4] : '']);
+  eq(T.guess(flat, resolve).fillDown, false);
+});
+
+check('T8: Tabellenblatt: erstes mit Daten, wählbar, ausgeblendete nicht in der Liste', async () => {
+  const daten = table(null, 6, i => '<row r="' + (i + 1) + '">' + is('A' + (i + 1), i ? MAILS[i % 4] : 'Notiz') + '<c r="B' + (i + 1) + '"' + (i ? '><v>' + CODES4[i % 4] + '</v></c>' : ' t="inlineStr"><is><t>Code</t></is></c>') + '</row>').join('');
+  const z = xlsx1('<row r="1">' + is('A1', 'Auswertung 2026') + '</row><row r="2">' + is('A2', 'Erstellt: 24.09.2026') + '</row>', '',
+    [['Deckblatt'], ['Intern', 'hidden', daten], ['Daten', null, daten], ['Leer', null, '']]);
+  let x = await T.readXlsx(z);
+  eq([x.sheet, x.sheets, x.sheetIndex, x.rows.length], ['Daten', ['Deckblatt', 'Daten', 'Leer'], 1, 6]);
+  x = await T.read(z, 'f.xlsx', { sheet: 0 });
+  eq([x.format, x.sheet, x.sheetIndex, x.rows], ['xlsx', 'Deckblatt', 0, [['Auswertung 2026'], ['Erstellt: 24.09.2026']]]);
+  x = await T.read(z, 'f.xlsx', { sheet: '2' });
+  eq([x.sheet, x.sheetIndex, x.rows.length], ['Leer', 2, 0]);
+  x = await T.read(z, 'f.xlsx', { sheet: 7 });   // ungültig -> Standard
+  eq(x.sheetIndex, 1);
+  // kein Blatt mit Daten: das erste
+  x = await T.readXlsx(xlsx1('<row r="1">' + is('A1', 'nur Titel') + '</row>', '', [['Eins'], ['Zwei', null, '<row r="1"><c r="A1"><v>1</v></c></row>']]));
+  eq([x.sheet, x.sheetIndex, x.rows], ['Eins', 0, [['nur Titel']]]);
+});
+
+check('T9: Codes mit Tausendertrennzeichen, Platzhalter nicht über enthaltene Bezeichnung', () => {
+  eq(["50'410", '50’410', '50`410', '50 410', '50 410'].map(resolve), Array(5).fill('50410'));
+  eq(["10'211", "3'712", "30'212"].map(resolve), ['10211', '3712', '30212']);   // früher still 211, 712, 212
+  eq(["1'234'567", '50 410'].map(resolve), [null, null]);
+  eq(['Grund unbekannt', 'Klassifizierung unbekannt', 'Kein Material', 'Bildqualität Farbe', 'Paket mit Postschaden angekommen',
+    'Kunde möchte Rückerstattung (doppelt bezahlt)', 'Postschaden: Leinwand eingedrückt, Kunde schickt Fotos'].map(resolve), Array(7).fill(null));
+  eq(['unbekannt', '(unbekannt)', 'Material', 'Postschaden'].map(resolve), ['512', '512', '10128', '517']);   // genaue Bezeichnung zählt
+  eq(['Operations > Logistics & Shipping > Lieferverzögerung', 'Lieferverzögerung (Kulanz)', 'Kategorie: Doppelbestellung',
+    'Finance > Rechnung per E-Mail nicht angekommen', 'Ops | Lieferverzögerung > Fotobuch', 'Herstellung mech. Beschädigung Seite eingerissen!'].map(resolve),
+    ['50410', '50410', '50702', '50114', '50410', '342']);
+});
+
+check('T10: UTF-8 mit einzelnen kaputten Bytes bleibt UTF-8', () => {
+  const ok = Buffer.from('Notiz;Klassifizierung\n' + table(null, 20, i => 'Bestätigung fehlt, Größe falsch;Lieferverzögerung').join('\n'), 'utf8');
+  const bad = Buffer.concat([ok.subarray(0, 40), Buffer.from([0x96]), ok.subarray(40)]);
+  const s = T.decode(bad);
+  assert.ok(s.includes('Lieferverzögerung') && s.includes('�'), s.slice(0, 80));
+  eq(T.decode(Buffer.from('Käse;Brücke;Größe', 'latin1')), 'Käse;Brücke;Größe');   // echtes windows-1252 bleibt
+  eq(T.decode(Buffer.concat([Buffer.from('Grüsse ', 'utf8'), Buffer.from([0xE4, 0x20, 0xFC])])), 'GrÃ¼sse ä ü');   // zu wenig UTF-8
+});
+
+check('T11: Excel-2003-XML (.xls): Blatt, Zeilen, ss:Index, Entities, verbundene Zellen', async () => {
+  const xml = '<?xml version="1.0"?>\r\n<?mso-application progid="Excel.Sheet"?>\r\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' +
+    'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:html="http://www.w3.org/TR/REC-html40">' +
+    '<Styles><Style ss:ID="Default"/></Styles>' +
+    '<Worksheet ss:Name="Versteckt"><Table><Row><Cell><Data ss:Type="String">X</Data></Cell></Row></Table>' +
+    '<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><Visible>SheetHidden</Visible></WorksheetOptions></Worksheet>' +
+    '<Worksheet ss:Name="F&#228;lle"><Table ss:ExpandedColumnCount="3">' +
+    '<Row><Cell><Data ss:Type="String">Notiz</Data></Cell><Cell ss:Index="3"><Data ss:Type="String">Code</Data></Cell></Row>' +
+    '<Row ss:Index="3"><Cell><ss:Data ss:Type="String" xmlns="http://www.w3.org/TR/REC-html40"><B>Tasse</B> kaputt &amp; Henkel ab&#10;Zeile 2</ss:Data>' +
+    '<Comment><Data>Notiz vom Team</Data></Comment></Cell><Cell ss:Index="3" ss:MergeDown="1"><Data ss:Type="Number">517</Data></Cell></Row>' +
+    '<Row><Cell ss:MergeAcross="1"><Data ss:Type="String">Karton nass</Data></Cell></Row>' +
+    '<Row/><Row><Cell><Data ss:Type="String">&lt;leer&gt;</Data></Cell><Cell/><Cell><Data ss:Type="Number">50410</Data></Cell></Row>' +
+    '</Table></Worksheet></Workbook>';
+  const x = await T.read(u8(xml), 'export.xls');
+  eq([x.format, x.sheet, x.sheets, x.sheetIndex], ['xml2003', 'Fälle', ['Fälle'], 0]);
+  eq(x.rows, [['Notiz', '', 'Code'], ['Tasse kaputt & Henkel ab\nZeile 2', '', '517'], ['Karton nass', 'Karton nass', '517'], ['<leer>', '', '50410']]);
+  eq(x.rows.lineNos, [1, 3, 4, 6]);
+  const r = tc(x.rows);
+  eq(r.cases.map(c => [c.c, c.line]), [['517', 3], ['517', 4], ['50410', 6]]);
+});
+
+check('T12: Zeilennummern wie in Excel (rows.lineNos, case.line)', async () => {
+  const rows = T.parseDelimited('Text;Code\n\n"Zeile mit\nUmbruch";50410\n;\nTasse kaputt;517\n');
+  eq(rows.lineNos, [1, 3, 5]);
+  eq(tc(rows).cases.map(c => [c.row, c.line]), [[1, 3], [2, 5]]);
+  const x = await T.read(MAIN, 'f.xlsx');
+  eq(x.rows.lineNos, [1, 2, 3, 6, 9]);
+  const h = await T.read(u8('<table><tr><td>Text</td><td>Code</td></tr><tr><td> </td></tr><tr><td>Tasse</td><td>517</td></tr></table>'), 'h.xls');
+  eq(h.rows.lineNos, [1, 3]);
+  eq(T.guess([], resolve).headerRow, -1); eq(T.parseDelimited('').lineNos, []);
+  // Zeilen ohne lineNos (z. B. von Hand gebaut): Index + 1
+  eq(tc([['Text', 'Code'], ['Fotobuch kam nie an', '50410']]).cases[0].line, 2);
+});
+
+check('T13: einzelnes " am Zellanfang (eingefügt) verschluckt keine Zeilen', () => {
+  const txt = 'Text\tCode\r\n"Buch kaputt angekommen, Ecke eingedrückt\t511\r\nZweite Zeile\t515\r\nDritte Zeile\t517\r\n';
+  eq(T.parseDelimited(txt), [['Text', 'Code'], ['"Buch kaputt angekommen, Ecke eingedrückt', '511'], ['Zweite Zeile', '515'], ['Dritte Zeile', '517']]);
+  const two = 'Text\tCode\n"Buch kaputt\t511\n"Tasse kaputt\t517\nRest\t515\n';
+  eq(T.parseDelimited(two), [['Text', 'Code'], ['"Buch kaputt', '511'], ['"Tasse kaputt', '517'], ['Rest', '515']]);
+  eq(T.parseDelimited('"Buch" sagt Kundin\t511\n"a\nb"\t515', '\t'), [['Buch sagt Kundin', '511'], ['a\nb', '515']]);
+  eq(T.parseDelimited('a;"b""c"\n"x";"y', ';'), [['a', 'b"c'], ['x', '"y']]);
+});
+
+check('T14: toCases meldet Textspalten, in denen oft ein Code steht', () => {
+  const rows = table(['Notiz', 'Code', 'Bezeichnung'], 20, i => [MAILS[i % 4], CODES4[i % 4], E.byCode[CODES4[i % 4]].label]);
+  const r = T.toCases(rows, { headerRow: 0, codeCol: 1, textCols: [0, 2] }, resolve);
+  eq(r.textColsWithCodes, [2]);
+  eq(r.cases[0].t, MAILS[0] + '\n' + E.byCode[CODES4[0]].label);
+  eq(T.toCases(rows, { headerRow: 0, codeCol: 1, textCols: [0] }, resolve).textColsWithCodes, []);
+  // gleicher Text in zwei Spalten nur einmal
+  eq(T.toCases([['a', 'b', 'c'], ['Tasse kaputt', 'Tasse kaputt', '517']], { headerRow: 0, codeCol: 2, textCols: [0, 1] }, resolve).cases[0].t, 'Tasse kaputt');
 });
 
 (async () => {

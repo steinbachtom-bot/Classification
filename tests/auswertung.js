@@ -29,12 +29,13 @@ const label = c => (E.byCode[c] ? E.byCode[c].label : '').slice(0, 38);
     const cfg = T.guess(res.rows, resolve);
     if (opt('--text')) cfg.textCols = opt('--text').split(',').map(n => +n - 1);
     if (opt('--code')) cfg.codeCol = +opt('--code') - 1;
-    if (args.includes('--kopf')) cfg.header = true;
-    if (args.includes('--kein-kopf')) cfg.header = false;
+    if (args.includes('--kopf')) cfg.headerRow = 0;
+    if (args.includes('--kein-kopf')) cfg.headerRow = -1;
     const tc = T.toCases(res.rows, cfg, resolve);
-    const name = i => (cfg.header ? `${i + 1} „${String(res.rows[0][i]).slice(0, 25)}“` : `${i + 1}`);
+    const name = i => (cfg.headerRow >= 0 ? `${i + 1} „${String(res.rows[cfg.headerRow][i]).slice(0, 25)}“` : `${i + 1}`);
+    const kopf = cfg.headerRow >= 0 ? `Zeile ${res.rows.lineNos ? res.rows.lineNos[cfg.headerRow] : cfg.headerRow + 1}` : 'keine';
     console.log(`Datei: ${file} (${res.format}${res.delimiter ? ', Trennzeichen ' + JSON.stringify(res.delimiter) : ''}${res.sheet ? ', Blatt „' + res.sheet + '“' : ''})`);
-    console.log(`Spalten: Text = ${cfg.textCols.map(name).join(' + ') || '-'} · Klassifizierung = ${cfg.codeCol >= 0 ? name(cfg.codeCol) : '-'} · Kopfzeile: ${cfg.header ? 'ja' : 'nein'}`);
+    console.log(`Spalten: Text = ${cfg.textCols.map(name).join(' + ') || '-'} · Klassifizierung = ${cfg.codeCol >= 0 ? name(cfg.codeCol) : '-'} · Kopfzeile: ${kopf}`);
     console.log(`Zeilen ${tc.total} · Fälle ${tc.cases.length} · ohne Code ${tc.noCode} · ohne Text ${tc.noText}` +
       (tc.unknown.length ? ` · nicht erkannt: ${tc.unknown.slice(0, 5).map(u => `"${u[0]}" (${u[1]}×)`).join(', ')}` : ''));
     cases = tc.cases.map(x => ({ t: x.t, c: x.c }));
@@ -45,7 +46,9 @@ const label = c => (E.byCode[c] ? E.byCode[c].label : '').slice(0, 38);
   while (!ctl.step(2000)) { const p = ctl.progress(); if (tty) process.stderr.write(`\r${p.phase} ${p.done}/${p.total}   `); }
   if (tty) process.stderr.write('\r' + ' '.repeat(40) + '\r');
   const r = ctl.result();
-  console.log(`\nGetestet ${r.tested} von ${r.usable} verwendbaren Fällen (übersprungen: ${JSON.stringify(r.skipped)}) in ${((Date.now() - t0) / 1000).toFixed(1)} s\n`);
+  console.log(`\nGetestet ${r.tested} von ${r.usable} verwendbaren Fällen in ${((Date.now() - t0) / 1000).toFixed(1)} s` +
+    ` · übersprungen: ${r.skipped.leer} ohne Text, ${r.skipped.unbekannterCode} unbekannter Code · zu kurz zum Lernen: ${r.zuKurzZumLernen}` +
+    ` · gleicher Text: ${r.sameText} · fast gleicher Text: ${r.nearDup}\n`);
   console.log('Methode'.padEnd(58), 'Platz 1   Top 3   kein Vorschlag');
   r.variants.forEach(v => console.log(v.name.padEnd(58), pc(v.top1, v.n), ' ', pc(v.top3, v.n), '  ', pc(v.none, v.n)));
   console.log('\nHäufigste Verwechslungen (nur Stichwörter, Platz 1):');
