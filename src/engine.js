@@ -96,6 +96,10 @@ var Engine = (function () {
   function isVocab(tok) {
     var n = norm(tok);
     if (!n) return false;
+    if (n.indexOf(" ") !== -1) {   // Bindestrich-Wörter: E-Mail, E-Rechnung, E-Mail-Adresse
+      var hp = n.split(" ");
+      return isVocab(hp.join("")) || (hp[hp.length - 1].length >= 5 && isVocab(hp[hp.length - 1]));
+    }
     if (vocab[n] || vocab[stem(n)]) return true;
     for (var i = 0; i < vocabLong.length; i++) if (n.indexOf(vocabLong[i]) === 0) return true;
     return false;
@@ -264,6 +268,7 @@ var Engine = (function () {
   // kurzer Name in Kleinbuchstaben; nichts mehr = ja)
   function sigStart(l) {
     if (l === undefined) return true;
+    if (!CLOSE_LINE.test(l) && GREET.test(l)) return false;   // eine Anrede beginnt eine Nachricht, keine Signatur
     if (sigLike(l) || DEVICE.test(l) || CLOSE_LINE.test(l) || THANKS_LINE.test(l) || /^\s*>/.test(l)) return true;
     var ws = l.match(/[\p{L}\p{N}]+/gu) || [];
     return ws.length <= 3 && !ws.some(function (w) { return isVocab(w) || isAbk(w); });
@@ -390,15 +395,16 @@ var Engine = (function () {
       var parts = names.split(/([ \t]+)/), before = str.slice(Math.max(0, at - 30), at + pre.length);
       if (isAbk(parts[0])) return m0;
       // "am Fr. Paket erhalten", "Mo-Fr." (Freitag); "meine Frau Tasse …", "für die Familie Kalender …" (keine Anrede)
-      if (!dr && isVocab(parts[0]) && (/^Fr\./.test(title) && (/^[-–]$/.test(pre) || FRI_CTX.test(before)) ||
+      if (!dr && isVocab(parts[0]) && (/^Fr\./.test(title) && (/^[-–]$/.test(pre) || FRI_CTX.test(before) || /(?:^|\n)[ \t]*$/.test(before)) ||
           (/^Frau\s/.test(title) && NOUN_CTX.test(before)) || (/^Familie\s/.test(title) && NOUN_CTX_FAM.test(before)))) return m0;
       for (var j = 0; j < parts.length; j += 2) {
         var p = parts[j];
-        if (j && (isVocab(p) || isAbk(p))) return pre + title + parts.slice(j).join("");
+        if (j && (isVocab(p) || isAbk(p))) return pre + (isAbk(p) ? title : title.replace(/[ \t]*$/, " – ")) + parts.slice(j).join("");
         // "Frau Meier. Paket fehlt": Satzende bleibt (Initialen wie "H." nicht)
         if (/\p{L}{3,}\.$/u.test(p)) { var ti = title.replace(/[ \t]+$/, ""); return pre + ti + (/\.$/.test(ti) ? " ." : ".") + parts.slice(j + 1).join(""); }
       }
-      return pre + title;
+      // Markierung „–“: eine zweite Bereinigung (gelernte Texte) hält das folgende Wort sonst für einen Namen
+      return pre + (/^[ \t]+[A-ZÄÖÜ]/.test(str.slice(at + m0.length)) ? title.replace(/[ \t]*$/, " – ") : title);
     });
     if (t !== n0) removed["Namen"] = 1;
     t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();

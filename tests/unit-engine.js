@@ -184,7 +184,7 @@ test('Konto-, Karten-, Telefon-, Referenznummern, Adressen und Namen werden entf
     ['Abholung am Bahnhofpl. 1 gewünscht', ['Bahnhofpl', ' 1 '], 'Adressen', ['Abholung am', 'gewünscht']],
     ['Frau Müller ruft an, FB n. erh.', ['Müller'], 'Namen', ['Frau ruft an, FB n. erh.']],
     ['Rückruf Hr. Hans Meier: Rechnung doppelt', ['Hans', 'Meier'], 'Namen', ['Rückruf Hr.', 'Rechnung doppelt']],
-    ['Herr Meier Rechnung doppelt bezahlt', ['Meier'], 'Namen', ['Herr Rechnung doppelt bezahlt']],
+    ['Herr Meier Rechnung doppelt bezahlt', ['Meier'], 'Namen', ['Herr – Rechnung doppelt bezahlt']],
     ['Paket für Herrn Beispiel kam zurück', ['Beispiel'], 'Namen', ['Paket für Herrn kam zurück']],
     ['Familie Keller wartet auf das Paket', ['Keller'], 'Namen', ['Familie wartet auf das Paket']],
     ['Fam. Keller und Fr. Frei warten', ['Keller', 'Frei'], 'Namen', ['Fam.', 'und Fr.', 'warten']]]
@@ -236,6 +236,24 @@ test('Namen nach Anrede: Abkürzungen bleiben, "Fr." = Freitag, "meine Frau" = N
   assert.strictEqual(EX.prepare('Hr. Keller TX kaputt').cleaned, 'Hr. TX kaputt');
   assert.strictEqual(EX.prepare('Frau TX kaputt').cleaned, 'Frau TX kaputt');
 });
+test('Bereinigung ist stabil: gelernter Text ändert sich beim zweiten Bereinigen nicht', () => {
+  ['Hr. Keller Rechnung doppelt erhalten', 'Herr Müller Farbstich Fotos', 'Hr. Hans Peter Meier Rechnung doppelt erhalten',
+   'Frau Dr. Anna Imhof ruft an: Gutschein ungültig', 'Fam. EGLI Leinwand beschädigt angekommen', 'Frau Keller E-Mail ändern'].forEach(t => {
+    const l = E.learnText(t);
+    assert.ok(l, 'lernbar: ' + t);
+    assert.strictEqual(E.prepare(l).cleaned, l, 'stabil: ' + t);
+  });
+});
+test('Kurze Notiz mit Gruss vor weitergeleiteter Nachricht ohne Kopf; E-Mail nach Name; „Fr.“ am Zeilenanfang', () => {
+  const fwd = 'FYI\nLG Sandra\n\nGuten Tag\nMein Fotobuch ist nie angekommen.\nFreundliche Grüsse\nAnna Beispiel';
+  assert.ok(/Fotobuch ist nie angekommen/.test(E.prepare(fwd).cleaned));
+  assert.strictEqual((E.classify(fwd)[0] || { c: {} }).c.code, '50410');
+  assert.ok(/E-Mail/.test(E.prepare('Frau Keller E-Mail ändern').cleaned));
+  assert.ok(!/Keller/.test(E.prepare('Frau Keller E-Mail ändern').cleaned));
+  assert.ok(/Rechnung/.test(E.prepare('Fr. Rechnung nicht erhalten').cleaned));
+  assert.ok(!/Meier/.test(E.prepare('Fr. Meier: FB n. erh.').cleaned));
+  assert.strictEqual(E.learnable('Guten Tag\n\nFreundliche Grüsse\nAnna Beispiel'), '');
+});
 test('Namen nach Anrede werden trotzdem entfernt (Titel, Doppelnamen, Grossbuchstaben, bekannte Wörter)', () => {
   // [Text, bereinigt]
   [['Hr. Hans Peter Imhof ruft an: Rechnung doppelt', 'Hr. ruft an: Rechnung doppelt'],
@@ -245,10 +263,10 @@ test('Namen nach Anrede werden trotzdem entfernt (Titel, Doppelnamen, Grossbuchs
     ['Frau Meier. Paket fehlt', 'Frau. Paket fehlt'],
     // Nachnamen in Grossbuchstaben sind keine Abkürzungen
     ['Frau ROTH FB n. erh.', 'Frau FB n. erh.'], ['Herr OTT RE doppelt', 'Herr RE doppelt'], ['Hr. HUG ruft an wegen FB', 'Hr. ruft an wegen FB'],
-    ['Fam. EGLI Fotobuch nicht erhalten', 'Fam. Fotobuch nicht erhalten'],
+    ['Fam. EGLI Fotobuch nicht erhalten', 'Fam. – Fotobuch nicht erhalten'],
     // Nachname = bekanntes Wort: als 1. Wort nach der Anrede trotzdem weg
     ['Frau Klein reklamiert Farbstich', 'Frau reklamiert Farbstich'], ['Rückruf an Frau Klein', 'Rückruf an Frau'],
-    ['Herr Frei wartet auf Paket', 'Herr wartet auf Paket'], ['für Herrn Frei Kalender bestellt', 'für Herrn Kalender bestellt'],
+    ['Herr Frei wartet auf Paket', 'Herr wartet auf Paket'], ['für Herrn Frei Kalender bestellt', 'für Herrn – Kalender bestellt'],
     // Freitag/Nomen nur vor einem bekannten Wort, sonst Name
     ['Am Fr. Meier angerufen, Paket fehlt', 'Am Fr. angerufen, Paket fehlt'], ['meine Frau Susanne hat bestellt', 'meine Frau hat bestellt'],
     ['für die Familie Keller bestellt', 'für die Familie bestellt'], ['Ich habe mit Ihrer Frau Keller telefoniert', 'Ich habe mit Ihrer Frau telefoniert']]

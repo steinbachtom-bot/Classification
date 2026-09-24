@@ -375,7 +375,15 @@ var Table = (function () {
     var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first, data = null,
       res = opts && typeof opts.resolve === "function" ? opts.resolve : null;
     function done(k, rows) { return { rows: rows, sheet: names[k], sheets: names, sheetIndex: k }; }
-    function cases(rows) { var g = guess(rows, res); return g.codeCol >= 0 && g.textCols.length > 0; }
+    function cases(rows) {   // Fallliste: Codes wiederholen sich (Übersicht oder Codeliste: jeder Code nur einmal)
+      var g = guess(rows, res), seen = Object.create(null), nr = 0, nd = 0, i, c;
+      if (g.codeCol < 0) return false;
+      for (i = g.headerRow + 1; i < rows.length && i < g.headerRow + 1000; i++) {
+        c = res(cell(rows[i], g.codeCol).trim()); if (!c) continue;
+        nr++; if (!seen[c]) { seen[c] = 1; nd++; }
+      }
+      return nr - nd >= Math.max(2, 0.1 * nr) || g.textCols.length > 0 && nr < 20;
+    }
     function next(k) {
       return Promise.resolve(load(k)).then(function (rows) {
         if (!k) first = rows;
@@ -669,10 +677,10 @@ var Table = (function () {
         if (y === codeCol || !st.ne || st.frac >= 0.3 || st.num > st.ne * 0.5 || st.odd > st.ne * 0.7 || st.junk > st.ne * 0.3) continue;
         if (SKIP.test(title(y)) && !noteTitle(title(y)) && !(EXTRA.test(title(y)) && st.avg >= 20)) continue;
         cand.push(y);
-        if (st.ne >= 0.3 * sample.length && !(st.one > st.ne * 0.7 && st.nv <= 5 && st.ne >= 10) && better(y, main)) main = y;
+        if (st.ne >= 0.3 * sample.length && !(st.one > st.ne * 0.7 && (st.nv <= 5 && st.ne >= 10 || hr >= 0 && !textTitle(title(y)))) && better(y, main)) main = y;
       }
       return { headerRow: hr, textCols: main < 0 ? [] : cand.filter(function (z) {
-        return z === main || hr >= 0 && textTitle(title(z)) && stats[z].avg >= 5 && stats[z].one <= stats[z].ne * 0.7;
+        return z === main || hr >= 0 && textTitle(title(z)) && stats[z].avg >= 5 && stats[z].one <= stats[z].ne * 0.7 && !(SKIP.test(title(z)) && stats[z].avg < 20);
       }) };
     }
 
@@ -685,25 +693,27 @@ var Table = (function () {
     //    Eine flache Liste mit vielen offenen Fällen (Codes wiederholt, Lücken verstreut) bekommt kein fillDown.
     function grouped(hr, cols) {
       var seen = Object.create(null), head = "", inRun = false, cnt = 0, codes = 0, rep = 0, heads = 0, fed = 0, tn = 0, te = 0,
-        underHead = 0, underCode = 0, runs = 0, x, r, c, rc, t;
+        underHead = 0, underCode = 0, runs = 0, x, r, c, rc, t, fresh = true, secs = 0, orphan = 0;   // Abschnitte, die mit einem Fall ohne Code beginnen = keine Gruppierung nach Code
       function hasText(z) { return !blank(cell(r, z)); }
       for (x = hr + 1; x < n && cnt < 300; x++) {
         r = rows[x]; c = cell(r, codeCol).trim(); t = cols.some(hasText);
-        if (c && subtotal(c)) { seen = Object.create(null); head = ""; continue; }
+        if (c && subtotal(c)) { seen = Object.create(null); head = ""; fresh = true; continue; }
         cnt++;
-        if (!c && !t) { if (distinct(r) <= 1) seen = Object.create(null); continue; }
+        if (!c && !t) { if (distinct(r) <= 1 || r.some(function (q) { return subtotal(str(q).trim()); })) { seen = Object.create(null); fresh = true; } continue; }
         if (c) {
+          if (fresh) { secs++; fresh = false; }
           rc = resolve(c); head = rc ? (t ? "c" : "g") : ""; inRun = false;
           if (rc) { codes++; if (seen[rc]) rep++; seen[rc] = 1; if (!t) heads++; }
           if (t) tn++;
           continue;
         }
         tn++; te++;
+        if (fresh) { secs++; orphan++; fresh = false; }
         if (head === "g") { underHead++; if (!inRun) fed++; } else if (head === "c") underCode++;
         if (head && !inRun) { runs++; inRun = true; }
       }
       return codes > 0 && te >= 0.3 * tn && (heads >= 3 && fed >= 0.7 * heads && underHead >= 0.6 * te ||
-        rep <= Math.max(1, 0.05 * codes) && underHead + underCode > 0.5 * te && runs >= 2);
+        rep <= Math.max(1, 0.05 * codes) && underHead + underCode > 0.5 * te && runs >= 2 && !(secs >= 5 && orphan > 0.1 * secs));
     }
     return { headerRow: res.headerRow, codeCol: codeCol, textCols: res.textCols,
       fillDown: codeCol >= 0 && res.textCols.length > 0 && grouped(res.headerRow, res.textCols) };

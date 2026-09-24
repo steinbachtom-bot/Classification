@@ -22,7 +22,7 @@ Fichier livré : `dist/Fall-Klassifizierung_DE.html`. C'est un fichier unique et
    - la formule d'appel, la signature (y compris après une ligne « -- » ou une formule de fin très courte), les pieds du type « Von meinem iPhone gesendet » et l'historique cité (« Von: », « Am … schrieb ») ;
    - les en-têtes et champs de formulaire (« Name: … ») ; si la valeur est une vraie phrase, seule l'étiquette est retirée ;
    - les e-mails, les téléphones (y compris « +41 (0)44 … »), les IBAN et numéros de carte, les dates, les numéros de 5 chiffres ou plus, les numéros de référence (« RE-2026/48213 » → « RE »), les adresses (y compris « Seestr. 50 ») ;
-   - le nom qui suit Frau, Herr, Hr., Fr. ou Familie ;
+   - le nom qui suit Frau, Herr, Hr., Fr. ou Familie (jusqu'à 3 mots, titres Dr./Prof. compris), remplacé par « – » pour que le texte reste stable si on le nettoie une 2e fois. Exceptions : les abréviations internes (« Hr. FB n. erh. » garde FB), « Fr. » = vendredi ou « Frage » (après am/seit/… ou en début de ligne), « meine Frau », « für die Familie » ;
    - les formules de politesse.
 
    L'interface affiche ce qui a été ignoré.
@@ -40,7 +40,7 @@ Fichier livré : `dist/Fall-Klassifizierung_DE.html`. C'est un fichier unique et
      - Tom peut tout changer dans le tableau d'aperçu.
    - **« Genauigkeit testen ».** Il mesure la précision **localement**, en « leave-one-out » : chaque cas est testé comme s'il était nouveau, sans lui-même ni les textes identiques.
      - Résultats affichés : Platz 1 et « unter den 3 Vorschlägen », pour « Nur Stichwörter (so wie heute) » et « Mit importierten Fällen ».
-     - Un verdict dit si l'apprentissage améliore l'outil ou l'empire, avec un avertissement si moins de 200 cas ont été testés.
+     - Un verdict dit si l'apprentissage améliore l'outil ou l'empire. Il regarde Platz 1 **et** « unter den 3 », avec un test de signe sur les cas qui changent (`pairs` : cas devenus justes ou faux). Aucun verdict en dessous de 30 cas testés, et une réserve en dessous de 200.
      - Détails : résultats par code, confusions, et liste des erreurs, visible **seulement à l'écran**.
      - Si la liste de cas contient beaucoup de textes presque identiques, une estimation prudente est affichée en plus (« ohne fast gleiche Texte »).
      - Des variantes techniques (poids 20/40/80, agrégation « max » ou « top3 », cas seuls) sont calculées pour régler les paramètres.
@@ -147,7 +147,7 @@ Toujours modifier `src/`, puis lancer `node build.js`, puis `node tests/run-test
 - **Évaluation (`Engine.evaluation(cases, {maxTests: 3000, minDocs: 5})`).** Elle avance par tranches de temps (`step(ms)`), sans toucher aux cas appris de Tom.
   - Au-delà de 3000 cas, elle teste 1 cas sur k, mais tous les cas servent de voisins.
   - L'IDF de l'index inclut le cas testé : c'est une approximation d'environ 1 point, documentée dans le code.
-  - Champs du rapport : `variants`, `perCode`, `confusions`, `triggers`, `words`, `errors` (indices, pour l'écran seulement), `sameText`, `nearDup`, `zuKurzZumLernen`.
+  - Champs du rapport : `variants`, `pairs`, `perCode`, `confusions`, `triggers`, `words`, `errors` (indices, pour l'écran seulement), `sameText`, `nearDup`, `zuKurzZumLernen`.
 - **Paramètres** en tête de fichier : `WIN`, `MAX_RESULTS`, `EX_WEIGHT`, `EX_MIN`, `LEARN_MAX` (1000).
 
 ## Les classifications
@@ -171,6 +171,7 @@ Toujours modifier `src/`, puis lancer `node build.js`, puis `node tests/run-test
 - Ne pas deviner à l'aveugle : partir des vrais cas de Tom, mesurer, puis corriger.
 - Rester honnête sur ce que les tests prouvent.
 - L'outil doit rester un seul fichier HTML hors ligne, sans envoi de données.
+- **Compromis connus du nettoyage :** un nom de famille qui est aussi un mot courant (Klein, Frei, Weiss…) reste après « Fr. » en début de ligne ou après « für die Familie » ; les quasi-doublons (même message avec une autre phrase autour) peuvent encore gonfler « Mit importierten Fällen ». L'écran le signale quand il en détecte beaucoup.
 - **Limite connue :** dans Chrome et Edge, toutes les pages HTML ouvertes depuis le disque (`file://`) partagent le même `localStorage`. Les cas appris y sont donc lisibles par d'autres fichiers HTML locaux.
 
 ## Formats utiles

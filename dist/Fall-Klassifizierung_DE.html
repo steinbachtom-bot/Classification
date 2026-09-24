@@ -159,7 +159,7 @@
   .toast {
     position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px);
     background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: 14px;
-    opacity: 0; pointer-events: none; transition: all .18s; max-width: calc(100% - 32px);
+    opacity: 0; pointer-events: none; transition: all .18s; max-width: calc(100% - 32px); width: max-content;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -264,6 +264,8 @@
   .verdict.bad { border-color: var(--danger); }
   .tag-imp { font-size: 11px; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
   .words .wx { font: inherit; font-size: 12.5px; background: transparent; border: 0; padding: 0; color: inherit; cursor: pointer; text-decoration: none; }
+  .words .wx.new { font-weight: 600; }
+  .words .wx.known { color: var(--faint); }
   .words .wx.off { text-decoration: line-through; color: var(--faint); font-weight: 400; }
   pre.report { font: 11.5px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
@@ -934,6 +936,10 @@ var Engine = (function () {
   function isVocab(tok) {
     var n = norm(tok);
     if (!n) return false;
+    if (n.indexOf(" ") !== -1) {   // Bindestrich-Wörter: E-Mail, E-Rechnung, E-Mail-Adresse
+      var hp = n.split(" ");
+      return isVocab(hp.join("")) || (hp[hp.length - 1].length >= 5 && isVocab(hp[hp.length - 1]));
+    }
     if (vocab[n] || vocab[stem(n)]) return true;
     for (var i = 0; i < vocabLong.length; i++) if (n.indexOf(vocabLong[i]) === 0) return true;
     return false;
@@ -1102,6 +1108,7 @@ var Engine = (function () {
   // kurzer Name in Kleinbuchstaben; nichts mehr = ja)
   function sigStart(l) {
     if (l === undefined) return true;
+    if (!CLOSE_LINE.test(l) && GREET.test(l)) return false;   // eine Anrede beginnt eine Nachricht, keine Signatur
     if (sigLike(l) || DEVICE.test(l) || CLOSE_LINE.test(l) || THANKS_LINE.test(l) || /^\s*>/.test(l)) return true;
     var ws = l.match(/[\p{L}\p{N}]+/gu) || [];
     return ws.length <= 3 && !ws.some(function (w) { return isVocab(w) || isAbk(w); });
@@ -1228,15 +1235,16 @@ var Engine = (function () {
       var parts = names.split(/([ \t]+)/), before = str.slice(Math.max(0, at - 30), at + pre.length);
       if (isAbk(parts[0])) return m0;
       // "am Fr. Paket erhalten", "Mo-Fr." (Freitag); "meine Frau Tasse …", "für die Familie Kalender …" (keine Anrede)
-      if (!dr && isVocab(parts[0]) && (/^Fr\./.test(title) && (/^[-–]$/.test(pre) || FRI_CTX.test(before)) ||
+      if (!dr && isVocab(parts[0]) && (/^Fr\./.test(title) && (/^[-–]$/.test(pre) || FRI_CTX.test(before) || /(?:^|\n)[ \t]*$/.test(before)) ||
           (/^Frau\s/.test(title) && NOUN_CTX.test(before)) || (/^Familie\s/.test(title) && NOUN_CTX_FAM.test(before)))) return m0;
       for (var j = 0; j < parts.length; j += 2) {
         var p = parts[j];
-        if (j && (isVocab(p) || isAbk(p))) return pre + title + parts.slice(j).join("");
+        if (j && (isVocab(p) || isAbk(p))) return pre + (isAbk(p) ? title : title.replace(/[ \t]*$/, " – ")) + parts.slice(j).join("");
         // "Frau Meier. Paket fehlt": Satzende bleibt (Initialen wie "H." nicht)
         if (/\p{L}{3,}\.$/u.test(p)) { var ti = title.replace(/[ \t]+$/, ""); return pre + ti + (/\.$/.test(ti) ? " ." : ".") + parts.slice(j + 1).join(""); }
       }
-      return pre + title;
+      // Markierung „–“: eine zweite Bereinigung (gelernte Texte) hält das folgende Wort sonst für einen Namen
+      return pre + (/^[ \t]+[A-ZÄÖÜ]/.test(str.slice(at + m0.length)) ? title.replace(/[ \t]*$/, " – ") : title);
     });
     if (t !== n0) removed["Namen"] = 1;
     t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
@@ -2254,7 +2262,15 @@ var Table = (function () {
     var want = opts && opts.sheet != null && opts.sheet !== "" ? +opts.sheet : -1, first, data = null,
       res = opts && typeof opts.resolve === "function" ? opts.resolve : null;
     function done(k, rows) { return { rows: rows, sheet: names[k], sheets: names, sheetIndex: k }; }
-    function cases(rows) { var g = guess(rows, res); return g.codeCol >= 0 && g.textCols.length > 0; }
+    function cases(rows) {   // Fallliste: Codes wiederholen sich (Übersicht oder Codeliste: jeder Code nur einmal)
+      var g = guess(rows, res), seen = Object.create(null), nr = 0, nd = 0, i, c;
+      if (g.codeCol < 0) return false;
+      for (i = g.headerRow + 1; i < rows.length && i < g.headerRow + 1000; i++) {
+        c = res(cell(rows[i], g.codeCol).trim()); if (!c) continue;
+        nr++; if (!seen[c]) { seen[c] = 1; nd++; }
+      }
+      return nr - nd >= Math.max(2, 0.1 * nr) || g.textCols.length > 0 && nr < 20;
+    }
     function next(k) {
       return Promise.resolve(load(k)).then(function (rows) {
         if (!k) first = rows;
@@ -2548,10 +2564,10 @@ var Table = (function () {
         if (y === codeCol || !st.ne || st.frac >= 0.3 || st.num > st.ne * 0.5 || st.odd > st.ne * 0.7 || st.junk > st.ne * 0.3) continue;
         if (SKIP.test(title(y)) && !noteTitle(title(y)) && !(EXTRA.test(title(y)) && st.avg >= 20)) continue;
         cand.push(y);
-        if (st.ne >= 0.3 * sample.length && !(st.one > st.ne * 0.7 && st.nv <= 5 && st.ne >= 10) && better(y, main)) main = y;
+        if (st.ne >= 0.3 * sample.length && !(st.one > st.ne * 0.7 && (st.nv <= 5 && st.ne >= 10 || hr >= 0 && !textTitle(title(y)))) && better(y, main)) main = y;
       }
       return { headerRow: hr, textCols: main < 0 ? [] : cand.filter(function (z) {
-        return z === main || hr >= 0 && textTitle(title(z)) && stats[z].avg >= 5 && stats[z].one <= stats[z].ne * 0.7;
+        return z === main || hr >= 0 && textTitle(title(z)) && stats[z].avg >= 5 && stats[z].one <= stats[z].ne * 0.7 && !(SKIP.test(title(z)) && stats[z].avg < 20);
       }) };
     }
 
@@ -2564,25 +2580,27 @@ var Table = (function () {
     //    Eine flache Liste mit vielen offenen Fällen (Codes wiederholt, Lücken verstreut) bekommt kein fillDown.
     function grouped(hr, cols) {
       var seen = Object.create(null), head = "", inRun = false, cnt = 0, codes = 0, rep = 0, heads = 0, fed = 0, tn = 0, te = 0,
-        underHead = 0, underCode = 0, runs = 0, x, r, c, rc, t;
+        underHead = 0, underCode = 0, runs = 0, x, r, c, rc, t, fresh = true, secs = 0, orphan = 0;   // Abschnitte, die mit einem Fall ohne Code beginnen = keine Gruppierung nach Code
       function hasText(z) { return !blank(cell(r, z)); }
       for (x = hr + 1; x < n && cnt < 300; x++) {
         r = rows[x]; c = cell(r, codeCol).trim(); t = cols.some(hasText);
-        if (c && subtotal(c)) { seen = Object.create(null); head = ""; continue; }
+        if (c && subtotal(c)) { seen = Object.create(null); head = ""; fresh = true; continue; }
         cnt++;
-        if (!c && !t) { if (distinct(r) <= 1) seen = Object.create(null); continue; }
+        if (!c && !t) { if (distinct(r) <= 1 || r.some(function (q) { return subtotal(str(q).trim()); })) { seen = Object.create(null); fresh = true; } continue; }
         if (c) {
+          if (fresh) { secs++; fresh = false; }
           rc = resolve(c); head = rc ? (t ? "c" : "g") : ""; inRun = false;
           if (rc) { codes++; if (seen[rc]) rep++; seen[rc] = 1; if (!t) heads++; }
           if (t) tn++;
           continue;
         }
         tn++; te++;
+        if (fresh) { secs++; orphan++; fresh = false; }
         if (head === "g") { underHead++; if (!inRun) fed++; } else if (head === "c") underCode++;
         if (head && !inRun) { runs++; inRun = true; }
       }
       return codes > 0 && te >= 0.3 * tn && (heads >= 3 && fed >= 0.7 * heads && underHead >= 0.6 * te ||
-        rep <= Math.max(1, 0.05 * codes) && underHead + underCode > 0.5 * te && runs >= 2);
+        rep <= Math.max(1, 0.05 * codes) && underHead + underCode > 0.5 * te && runs >= 2 && !(secs >= 5 && orphan > 0.1 * secs));
     }
     return { headerRow: res.headerRow, codeCol: codeCol, textCols: res.textCols,
       fillDown: codeCol >= 0 && res.textCols.length > 0 && grouped(res.headerRow, res.textCols) };
@@ -3194,13 +3212,17 @@ var Table = (function () {
     var s1 = state(L1), s3 = state(L3);
     function pc(v, k) { return Math.round(100 * v[k] / v.n) + " %"; }
     var nums = " (Platz 1: " + pc(L1.v, "top1") + " statt " + pc(reg, "top1") + " · unter den 3 Vorschlägen: " + pc(L3.v, "top3") + " statt " + pc(reg, "top3") + ")";
-    var chg = " Mit den Fällen: Platz 1 " + nf(L1.p.fixed, "Fall", "Fälle") + " neu richtig, " + fmt(L1.p.broken) + " neu falsch; unter den 3 " +
-      nf(L3.p.fixed, "Fall", "Fälle") + " neu richtig, " + fmt(L3.p.broken) + " neu falsch.";
+    var chg = " Veränderte Fälle – Platz 1: " + fmt(L1.p.fixed) + " neu richtig, " + fmt(L1.p.broken) + " neu falsch; unter den 3 Vorschlägen: " +
+      fmt(L3.p.fixed) + " neu richtig, " + fmt(L3.p.broken) + " neu falsch.";
     var caveat = r.tested < 200 ? " Mit nur " + nf(r.tested, "getestetem Fall", "getesteten Fällen") + " ist das Ergebnis noch unsicher." : "";
     var out = { a: pc(reg, "top3"), b: pc(L3.v, "top3"), a1: pc(reg, "top1"), b1: pc(L1.v, "top1") };
+    if (r.tested < 30) {
+      out.cls = ""; out.html = "Nur " + nf(r.tested, "Fall", "Fälle") + " getestet – zu wenige für eine Aussage" + nums + ". Für ein verlässliches Ergebnis mindestens 200 Fälle laden, am besten mehrere pro Klassifizierung.";
+      return out;
+    }
     if (s1 < 0 || s3 < 0) {
-      out.worse = true;
-      if (s1 > 0 || s3 > 0) { out.cls = "bad"; out.html = "<b>Gemischtes Ergebnis</b>" + nums + ": " + (s1 > 0 ? "Platz 1 besser, aber unter den 3 Vorschlägen schlechter." : "unter den 3 Vorschlägen besser, aber Platz 1 schlechter.") + chg + " Besser noch nicht übernehmen." + caveat; }
+      out.worse = true; out.mixed = s1 > 0 || s3 > 0;
+      if (out.mixed) { out.cls = "bad"; out.html = "<b>Gemischtes Ergebnis</b>" + nums + ": " + (s1 > 0 ? "Platz 1 besser, aber unter den 3 Vorschlägen schlechter." : "unter den 3 Vorschlägen besser, aber Platz 1 schlechter.") + chg + " Besser noch nicht übernehmen." + caveat; }
       else { out.cls = "bad"; out.html = "<b>Mit diesen Fällen würde das Tool schlechter</b>" + nums + "." + chg + " Besser nicht als gelernte Fälle übernehmen." + caveat; }
     } else if (s1 > 0 || s3 > 0) {
       out.cls = "good"; out.html = "<b>Die importierten Fälle machen das Tool besser</b>" + nums + "." + chg + " Übernehmen lohnt sich." + caveat;
@@ -3313,7 +3335,7 @@ var Table = (function () {
   function buildReport(r) {
     var res = imp.res || { total: 0, cases: [], noCode: 0, noText: 0, unknown: [] };
     // Nur Werte, die wie Codes aussehen – sonst könnte hier Freitext aus einer falsch gewählten Spalte landen
-    var codeLike = res.unknown.filter(function (u) { return /^\s*\d{3,6}\b/.test(u[0]); });
+    var codeLike = res.unknown.filter(function (u) { return /^\s*\d{3,5}(?!\d)/.test(u[0]); });
     var words = !imp.wordsOn ? undefined : (r.words || []).map(function (x) {
       return { code: x.code, n: x.n, words: x.words.filter(function (w) { return !imp.wordsOff[w[0]]; }) };
     }).filter(function (x) { return x.words.length; });
@@ -3322,7 +3344,7 @@ var Table = (function () {
       hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes und Stichwort-Regeln" + (words ? " sowie ausgewählte Wörter aus mindestens 5 Fällen" : "") + ".",
       quelle: { format: imp.format, zeilen: res.total, faelle: res.cases.length, ohneCode: res.noCode, ohneText: res.noText,
         summenzeilen: res.subtotal || 0, ausZeileDarueber: res.filled || 0,
-        nichtErkannteCodes: codeLike.map(function (u) { return [String(u[0]).match(/\d{3,6}/)[0], u[1]]; }) },
+        nichtErkannteCodes: codeLike.map(function (u) { return [String(u[0]).match(/\d{3,5}/)[0], u[1]]; }) },
       test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped,
         zuKurzZumLernen: r.zuKurzZumLernen, gleicherText: r.sameText, fastGleicherText: r.nearDup, veraenderteFaelle: r.pairs },
       methoden: r.variants.map(function (v) {
@@ -3341,10 +3363,10 @@ var Table = (function () {
     var what = b.getAttribute("data-ev");
     if (what === "codes") {
       imp.codesAll = true; renderEval();
-      var sm = $("evalOut").querySelector('details[data-k="codes"] > summary'); if (sm) sm.focus();
+      var sm = $("evalOut").querySelector('details[data-k="codes"] > summary'); if (sm) sm.focus({ preventScroll: true });
     } else if (what === "moreErr") {
       var first = imp.errN; imp.errN += 25; renderEval();
-      var nb = $("evalOut").querySelectorAll('[data-ev="open"]')[first]; if (nb) nb.focus();
+      var nb = $("evalOut").querySelectorAll('[data-ev="open"]')[first]; if (nb) nb.focus({ preventScroll: true });
     } else if (what === "word") {
       var w = b.getAttribute("data-w"); imp.wordsOff[w] = !imp.wordsOff[w];
       Array.prototype.forEach.call($("evalOut").querySelectorAll(".wx"), function (x) {
@@ -3355,7 +3377,7 @@ var Table = (function () {
     } else if (what === "open") {
       var cs = imp.cases && imp.cases[parseInt(b.getAttribute("data-i"), 10)];
       if (!cs) return;
-      if (q.value.trim() && q.value !== cs.t && !window.confirm("Im Eingabefeld steht schon Text. Durch diesen Fall ersetzen?")) return;
+      if (q.value.trim() && q.value !== cs.t && q.value !== openedCase && !window.confirm("Im Eingabefeld steht schon Text. Durch diesen Fall ersetzen?")) return;
       openedCase = cs.t;
       q.value = cs.t; render(); window.scrollTo(0, 0); q.focus();
       toast("Zeile " + fmt(cs.line) + " geöffnet – richtig wäre " + full(BY[cs.c]) + ". Nur den richtigen Code kopieren.", "Zurück", function () { b.scrollIntoView({ block: "center" }); b.focus(); });
@@ -3403,7 +3425,7 @@ var Table = (function () {
     if (!imp.result) msg = "Tipp: zuerst „Genauigkeit testen“ – dann siehst du, ob die Fälle die Vorschläge verbessern.\n\n" + msg;
     else {
       var vd = verdict(imp.result);
-      if (vd.worse) msg = "Achtung: Laut Test wird das Tool mit diesen Fällen schlechter (Platz 1: " + vd.b1 + " statt " + vd.a1 + ", unter den 3 Vorschlägen: " + vd.b + " statt " + vd.a + ").\nTrotzdem übernehmen?\n\n" + msg;
+      if (vd.worse) msg = "Achtung: Laut Test wird das Tool mit diesen Fällen " + (vd.mixed ? "teils besser, teils schlechter" : "schlechter") + " (Platz 1: " + vd.b1 + " statt " + vd.a1 + ", unter den 3 Vorschlägen: " + vd.b + " statt " + vd.a + ").\nTrotzdem übernehmen?\n\n" + msg;
     }
     if (!window.confirm(msg)) return;
     var base = learned.slice(), n = add.length;
