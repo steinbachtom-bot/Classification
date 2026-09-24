@@ -204,6 +204,43 @@
   .litem .del:hover { color: #cf222e; }
   .toast button { margin-left: 10px; font: inherit; font-weight: 700; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 6px; padding: 1px 8px; cursor: pointer; }
   .toast.show.action { pointer-events: auto; }
+
+  /* Fälle importieren und testen */
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); color: #fff; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .imp-paste textarea { min-height: 110px; font-size: 13px; padding: 10px; }
+  .imp-paste .btnrow { margin-top: 8px; }
+  .imp-err { font-size: 13px; color: #cf222e; margin: 0 0 10px; }
+  .imp-file { font-size: 13px; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+  .scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; margin: 6px 0 10px; }
+  table.tbl { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  .tbl th, .tbl td { text-align: left; vertical-align: top; padding: 5px 8px; border-top: 1px solid var(--border); }
+  .tbl thead th { border-top: 0; background: var(--surface-2); font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .tbl td.num, .tbl th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tbl code { font: 600 12px ui-monospace, Menlo, Consolas, monospace; color: var(--accent); }
+  .tbl .col-text { background: var(--accent-soft); }
+  .tbl .col-code { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .tbl.preview td { max-width: 280px; overflow-wrap: anywhere; }
+  .tbl tr.main td { font-weight: 600; }
+  .tbl select { font: inherit; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 1px 3px; margin-top: 3px; display: block; }
+  .check { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; margin: 0 0 6px; }
+  .imp-sum { font-size: 13px; margin: 4px 0 10px; }
+  .imp-sum b { font-weight: 600; }
+  .imp-prog { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+  .imp-prog progress { flex: 1; max-width: 320px; }
+  .ev h3 { font-size: 14px; margin: 18px 0 6px; }
+  .ev details { margin: 8px 0; }
+  .ev details > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+  .ev .ok { color: var(--ok); font-weight: 600; }
+  .ev .bad { color: #cf222e; }
+  .errcase { border-top: 1px solid var(--border); padding: 8px 0; font-size: 13px; }
+  .errcase .et { color: var(--muted); font-style: italic; overflow-wrap: anywhere; margin-top: 3px; }
+  .errcase .btn { font-size: 12px; padding: 2px 8px; margin-left: 6px; }
+  .words { font-size: 12.5px; line-height: 1.7; }
+  .words .new { font-weight: 600; }
+  .words .known { color: var(--faint); }
+  pre.report { font: 11.5px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -251,14 +288,45 @@
     <summary><span>Gelernte Fälle <span class="count" id="learnedCount"></span></span></summary>
     <div class="learned-body">
       <p class="note">Wenn Text im Feld steht und du einen Code kopierst (Vorschlag, Suche oder Liste), merkt sich das Tool diesen Fall. Ähnliche Texte bekommen danach diesen Code vorgeschlagen. Gespeichert wird nur der bereinigte Text (ohne Anrede, Signatur, E-Mail-Adressen, Telefonnummern und Nummern) – nur in diesem Browser.</p>
-      <p class="warn" id="storageWarn" hidden>Dieser Browser erlaubt hier kein dauerhaftes Speichern: gelernte Fälle gehen beim Schliessen verloren. Bitte regelmässig exportieren.</p>
+      <p class="warn" id="storageWarn" hidden>Gelernte Fälle können hier nicht (mehr) dauerhaft gespeichert werden – der Browser erlaubt es nicht oder der Speicher ist voll. Neue Fälle gehen beim Schliessen verloren. Bitte exportieren oder importierte Fälle löschen.</p>
       <div class="btnrow">
         <button class="btn" type="button" id="btnExport">Exportieren</button>
         <button class="btn" type="button" id="btnImport">Importieren</button>
+        <button class="btn danger" type="button" id="btnClearImported" hidden>Importierte löschen</button>
         <button class="btn danger" type="button" id="btnClear">Alle löschen</button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
       <div id="learnedList"></div>
+    </div>
+  </details>
+
+  <details class="card learned" id="impBox">
+    <summary><span>Fälle importieren und testen</span></summary>
+    <div class="learned-body">
+      <p class="note">Frühere Fälle aus Excel oder CSV laden: eine Spalte mit dem Text (Notiz oder Kundennachricht) und eine Spalte mit der Klassifizierung. Damit kann das Tool <b>seine Genauigkeit an echten Fällen messen</b> und die Fälle <b>auf einmal lernen</b>. Alles passiert in diesem Browser – es wird nichts gesendet.</p>
+      <div class="btnrow">
+        <button class="btn" type="button" id="btnImpFile">Datei wählen (.xlsx, .csv)</button>
+        <button class="btn" type="button" id="btnImpPaste">Aus Excel einfügen</button>
+        <input type="file" id="impFile" accept=".xlsx,.xls,.csv,.txt,.tsv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      </div>
+      <div class="imp-paste" id="impPasteBox" hidden>
+        <textarea id="impPaste" spellcheck="false" placeholder="In Excel die Spalten mit Text und Klassifizierung markieren (mit Überschriften), kopieren (Ctrl+C) und hier einfügen (Ctrl+V)"></textarea>
+        <div class="btnrow"><button class="btn" type="button" id="btnImpPasteOk">Eingefügte Zeilen übernehmen</button></div>
+      </div>
+      <p class="imp-err" id="impErr" hidden></p>
+      <div id="impMap" hidden>
+        <p class="imp-file" id="impFileInfo"></p>
+        <label class="check"><input type="checkbox" id="impHeader"> Erste Zeile enthält Spaltennamen</label>
+        <p class="note">Für jede Spalte wählen: <b>Text</b> (auch mehrere, z.B. Betreff und Beschreibung) und genau eine Spalte <b>Klassifizierung</b> (Code, z.B. 50410, oder Bezeichnung).</p>
+        <div class="scroll"><table class="tbl preview" id="impPreview"></table></div>
+        <div class="imp-sum" id="impSum"></div>
+        <div class="btnrow">
+          <button class="btn primary" type="button" id="btnEval" disabled>Genauigkeit testen</button>
+          <button class="btn" type="button" id="btnLearnAll" disabled>Alle als gelernte Fälle übernehmen</button>
+        </div>
+        <div class="imp-prog" id="impProg" hidden><progress id="impProgBar" max="1" value="0"></progress><span id="impProgTxt"></span><button class="btn" type="button" id="btnEvalStop">Abbrechen</button></div>
+        <div class="ev" id="evalOut"></div>
+      </div>
     </div>
   </details>
 
@@ -271,6 +339,9 @@
 </script>
 <script>
 /*__ENGINE__*/
+</script>
+<script>
+/*__TABLE__*/
 </script>
 <script>
 (function () {
@@ -296,6 +367,8 @@
   }
   function full(c) { return c.code + " - " + c.label; }
   function snippet(t, n) { t = String(t).replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; }
+  function fmt(n) { return Number(n).toLocaleString("de-CH"); }
+  function pct(a, n) { return n ? Math.round(100 * a / n) + " %" : "–"; }
 
   // ---------- Gelernte Fälle ----------
   var KEY = "fall-klassifizierung.gelernt.v1", storageOk = true;
@@ -328,9 +401,12 @@
   }
 
   function updateLearnedUI() {
-    $("badge").textContent = CLASSES.length + " Klassifizierungen · " + learned.length + (learned.length === 1 ? " gelernter Fall" : " gelernte Fälle");
-    $("learnedCount").textContent = "(" + learned.length + ")";
+    $("badge").textContent = CLASSES.length + " Klassifizierungen · " + fmt(learned.length) + (learned.length === 1 ? " gelernter Fall" : " gelernte Fälle");
+    $("learnedCount").textContent = "(" + fmt(learned.length) + ")";
     $("storageWarn").hidden = storageOk;
+    var nImp = learned.filter(function (e) { return e.s === "import"; }).length;
+    $("btnClearImported").hidden = !nImp;
+    $("btnClearImported").textContent = "Importierte löschen (" + fmt(nImp) + ")";
     var items = learned.slice().reverse().slice(0, 40);
     $("learnedList").innerHTML = items.length ? items.map(function (e) {
       var c = BY[e.c];
@@ -538,12 +614,16 @@
       try {
         var data = JSON.parse(rd.result);
         var arr = Array.isArray(data) ? data : (data.beispiele || data.examples || []);
-        var n = 0;
+        var n = 0, seen = {};
+        learned.forEach(function (y) { seen[y.c + "\u0001" + y.t] = 1; });
         arr.forEach(function (x) {
           if (!x || !x.t || !BY[x.c]) return;
           var t = String(x.t).slice(0, 1500);
-          if (learned.some(function (y) { return y.t === t && y.c === x.c; })) return;
-          learned.push({ t: t, c: String(x.c), d: x.d || "" }); n++;
+          if (seen[x.c + "\u0001" + t]) return;
+          seen[x.c + "\u0001" + t] = 1;
+          var it = { t: t, c: String(x.c), d: x.d || "" };
+          if (x.s === "import") it.s = "import";
+          learned.push(it); n++;
         });
         saveLearned(); reindex(); render();
         toast(n + (n === 1 ? " Fall importiert" : " Fälle importiert"));
@@ -554,8 +634,308 @@
   });
   $("btnClear").addEventListener("click", function () {
     if (!learned.length) return;
-    if (!window.confirm("Alle " + learned.length + " gelernten Fälle löschen? Tipp: vorher exportieren.")) return;
+    if (!window.confirm("Alle " + fmt(learned.length) + " gelernten Fälle löschen? Tipp: vorher exportieren.")) return;
     learned = []; saveLearned(); reindex(); render();
+  });
+  $("btnClearImported").addEventListener("click", function () {
+    var n = learned.filter(function (e) { return e.s === "import"; }).length;
+    if (!n || !window.confirm(fmt(n) + " importierte Fälle löschen? Von Hand gelernte Fälle bleiben.")) return;
+    learned = learned.filter(function (e) { return e.s !== "import"; }); saveLearned(); reindex(); render();
+  });
+  function download(name, text) {
+    var blob = new Blob([text], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  // ---------- Fälle importieren und testen ----------
+  var resolveCode = Table.codeResolver(CLASSES);
+  var imp = { rows: null, cfg: null, res: null, format: "", ctl: null, result: null, cases: null, errN: 25, codesAll: false };
+  var DELIM = { "\t": "Tabulator", ";": "Semikolon", ",": "Komma", "|": "senkrechter Strich" };
+
+  function impError(msg) { $("impErr").textContent = msg || ""; $("impErr").hidden = !msg; }
+  function colName(i) { var s = ""; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; }
+  function codeHtml(code) { var c = BY[code]; return "<code>" + esc(code) + "</code> " + esc(c ? c.label : ""); }
+
+  function loadTable(rows, info) {
+    impError("");
+    cancelEval();
+    if (!rows || !rows.length) { impError("Keine Zeilen gefunden."); return false; }
+    if (rows[0].length < 2) { impError("Nur eine Spalte gefunden – es braucht eine Spalte mit dem Text und eine mit der Klassifizierung."); return false; }
+    imp.rows = rows;
+    imp.cfg = Table.guess(rows, resolveCode);
+    $("impMap").hidden = false;
+    $("impFileInfo").textContent = info + " · " + fmt(rows.length) + " Zeilen, " + rows[0].length + " Spalten";
+    $("impHeader").checked = imp.cfg.header;
+    renderMap(); updateCases();
+    return true;
+  }
+
+  function colClass(i) { return imp.cfg.codeCol === i ? "col-code" : imp.cfg.textCols.indexOf(i) !== -1 ? "col-text" : ""; }
+  function renderMap() {
+    var rows = imp.rows, cfg = imp.cfg, n = rows[0].length, i, html = "<thead><tr>";
+    for (i = 0; i < n; i++) {
+      var role = cfg.codeCol === i ? "code" : cfg.textCols.indexOf(i) !== -1 ? "text" : "";
+      html += '<th class="' + colClass(i) + '">' + colName(i) + (cfg.header && String(rows[0][i]).trim() ? ": " + esc(snippet(rows[0][i], 30)) : "") +
+        '<select data-col="' + i + '" aria-label="Spalte ' + colName(i) + '">' +
+        '<option value=""' + (role ? "" : " selected") + '>– nicht verwenden</option>' +
+        '<option value="text"' + (role === "text" ? " selected" : "") + ">Text</option>" +
+        '<option value="code"' + (role === "code" ? " selected" : "") + ">Klassifizierung</option></select></th>";
+    }
+    html += "</tr></thead><tbody>";
+    var start = cfg.header ? 1 : 0;
+    rows.slice(start, start + 5).forEach(function (r) {
+      html += "<tr>" + r.map(function (cell, j) { return '<td class="' + colClass(j) + '">' + esc(snippet(cell, 140)) + "</td>"; }).join("") + "</tr>";
+    });
+    $("impPreview").innerHTML = html + "</tbody>";
+  }
+  $("impPreview").addEventListener("change", function (e) {
+    var sel = e.target.closest("select[data-col]");
+    if (!sel) return;
+    var col = parseInt(sel.getAttribute("data-col"), 10), cfg = imp.cfg;
+    cfg.textCols = cfg.textCols.filter(function (c) { return c !== col; });
+    if (cfg.codeCol === col) cfg.codeCol = -1;
+    if (sel.value === "text") cfg.textCols = cfg.textCols.concat([col]).sort(function (a, b) { return a - b; });
+    if (sel.value === "code") { cfg.textCols = cfg.textCols.filter(function (c) { return c !== col; }); cfg.codeCol = col; }
+    renderMap(); updateCases();
+  });
+  $("impHeader").addEventListener("change", function () { imp.cfg.header = this.checked; renderMap(); updateCases(); });
+
+  function updateCases() {
+    cancelEval();
+    imp.result = null; $("evalOut").innerHTML = "";
+    var r = imp.res = Table.toCases(imp.rows, imp.cfg, resolveCode);
+    var codes = {};
+    r.cases.forEach(function (x) { codes[x.c] = 1; });
+    var html = "<b>" + fmt(r.cases.length) + (r.cases.length === 1 ? " Fall" : " Fälle") + "</b> mit Text und gültiger Klassifizierung";
+    if (r.cases.length) html += " (" + fmt(Object.keys(codes).length) + " verschiedene Klassifizierungen)";
+    html += " · von " + fmt(r.total) + " Zeilen";
+    if (r.noCode) html += " · " + fmt(r.noCode) + " ohne gültige Klassifizierung";
+    if (r.noText) html += " · " + fmt(r.noText) + " ohne Text";
+    if (imp.cfg.codeCol < 0) html += "<br>Bitte eine Spalte als <b>Klassifizierung</b> wählen.";
+    if (!imp.cfg.textCols.length) html += "<br>Bitte mindestens eine Spalte als <b>Text</b> wählen.";
+    if (r.unknown.length) html += "<br>Nicht erkannte Klassifizierungen: " + r.unknown.slice(0, 6).map(function (u) {
+      return "„" + esc(snippet(u[0], 40)) + "“ (" + fmt(u[1]) + "×)";
+    }).join(", ");
+    $("impSum").innerHTML = html;
+    $("btnEval").disabled = $("btnLearnAll").disabled = !r.cases.length;
+  }
+
+  function readBytes(f) {
+    if (f.arrayBuffer) return f.arrayBuffer().then(function (b) { return new Uint8Array(b); });
+    return new Promise(function (ok, fail) {
+      var rd = new FileReader();
+      rd.onload = function () { ok(new Uint8Array(rd.result)); };
+      rd.onerror = function () { fail(rd.error); };
+      rd.readAsArrayBuffer(f);
+    });
+  }
+  function readError(err) {
+    if (err && err.code === "XLS") return "Alte Excel-Datei (.xls): bitte in Excel mit „Speichern unter“ als .xlsx oder CSV speichern.";
+    if (err && err.code === "ZIP") return "Diese Excel-Datei kann nicht gelesen werden (evtl. mit Passwort geschützt). Bitte als CSV speichern.";
+    if (typeof DecompressionStream === "undefined") return "Dieser Browser kann .xlsx-Dateien nicht lesen. Bitte in Excel als CSV speichern oder die Zeilen kopieren und einfügen.";
+    return "Die Datei konnte nicht gelesen werden.";
+  }
+  $("btnImpFile").addEventListener("click", function () { $("impFile").click(); });
+  $("impFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    impError("");
+    readBytes(f).then(function (bytes) { return Table.read(bytes, f.name); }).then(function (res) {
+      imp.format = res.format;
+      var info = f.name + (res.format === "xlsx"
+        ? " (Excel" + (res.sheets && res.sheets.length > 1 ? ", nur das erste Blatt „" + res.sheet + "“" : "") + ")"
+        : " (Text, getrennt mit " + (DELIM[res.delimiter] || "?") + ")");
+      loadTable(res.rows, info);
+    }).catch(function (err) { impError(readError(err)); if (window.console) console.warn(err); });
+  });
+  $("btnImpPaste").addEventListener("click", function () {
+    var box = $("impPasteBox");
+    box.hidden = !box.hidden;
+    if (!box.hidden) $("impPaste").focus();
+  });
+  $("btnImpPasteOk").addEventListener("click", function () {
+    var t = $("impPaste").value;
+    if (!t.trim()) { impError("Zuerst Zeilen aus Excel einfügen."); return; }
+    imp.format = "eingefügt";
+    if (loadTable(Table.parseDelimited(t), "Eingefügte Zeilen")) { $("impPaste").value = ""; $("impPasteBox").hidden = true; }
+  });
+
+  // --- Genauigkeit testen (läuft in kleinen Schritten, damit die Seite bedienbar bleibt)
+  var PHASE = { prepare: [0, 0.15, "Fälle vorbereiten"], test: [0.15, 0.8, "Fälle testen"], words: [0.95, 0.05, "Wörter zählen"], done: [1, 0, "Fertig"] };
+  function cancelEval() {
+    imp.ctl = null;
+    $("impProg").hidden = true;
+    if (imp.res) $("btnEval").disabled = !imp.res.cases.length;
+  }
+  $("btnEvalStop").addEventListener("click", cancelEval);
+  $("btnEval").addEventListener("click", function () {
+    if (!imp.res || !imp.res.cases.length) return;
+    imp.cases = imp.res.cases;
+    imp.result = null; imp.errN = 25; imp.codesAll = false;
+    var ctl = imp.ctl = Engine.evaluation(imp.cases.map(function (x) { return { t: x.t, c: x.c }; }), { maxTests: 3000, minDocs: 5 });
+    $("evalOut").innerHTML = ""; $("impProg").hidden = false; $("btnEval").disabled = true;
+    (function tick() {
+      if (imp.ctl !== ctl) return;
+      var done;
+      try { done = ctl.step(document.hidden ? 400 : 40); }
+      catch (err) { cancelEval(); impError("Beim Testen ist ein Fehler aufgetreten: " + err.message); return; }
+      var p = ctl.progress(), ph = PHASE[p.phase] || PHASE.done;
+      $("impProgBar").value = ph[0] + ph[1] * (p.total ? p.done / p.total : 1);
+      $("impProgTxt").textContent = ph[2] + (p.total ? " " + fmt(p.done) + " / " + fmt(p.total) : "");
+      if (!done) { setTimeout(tick, 0); return; }
+      imp.result = ctl.result();
+      cancelEval();
+      renderEval();
+    })();
+  });
+
+  function codesHtml(list, exp) {
+    if (!list.length) return '<span class="bad">kein Vorschlag</span>';
+    return list.map(function (c) { return c === exp ? '<span class="ok">' + esc(c) + " ✓</span>" : esc(c); }).join(", ");
+  }
+  function renderEval() {
+    var r = imp.result, V = {}, html = "";
+    if (!r) return;
+    r.variants.forEach(function (v) { V[v.id] = v; });
+    var sk = [];
+    if (r.skipped.zuWenigText) sk.push(fmt(r.skipped.zuWenigText) + " mit zu wenig Text");
+    if (r.skipped.unbekannterCode) sk.push(fmt(r.skipped.unbekannterCode) + " mit unbekanntem Code");
+    html += "<h3>Ergebnis</h3><p class=\"note\">Getestet: <b>" + fmt(r.tested) + (r.tested === 1 ? " Fall" : " Fälle") + "</b>" +
+      (r.sampleEvery > 1 ? " (jeder " + r.sampleEvery + ". von " + fmt(r.usable) + " Fällen, damit es schneller geht)" : "") +
+      (sk.length ? " · nicht getestet: " + sk.join(", ") : "") + "</p>";
+    function row(v, main) {
+      return "<tr" + (main ? ' class="main"' : "") + "><td>" + esc(v.name) + '</td><td class="num">' + pct(v.top1, v.n) +
+        '</td><td class="num">' + pct(v.top3, v.n) + '</td><td class="num">' + pct(v.none, v.n) + "</td></tr>";
+    }
+    var head = '<thead><tr><th>Methode</th><th class="num">Richtig auf Platz 1</th><th class="num">Richtig unter den 3 Vorschlägen</th><th class="num">Kein Vorschlag</th></tr></thead>';
+    html += '<div class="scroll"><table class="tbl">' + head + "<tbody>" + (V.regeln ? row(V.regeln, true) : "") + (V.gelernt ? row(V.gelernt, true) : "") + "</tbody></table></div>";
+    html += '<p class="note">„Nur Stichwörter“ = so gut ist das Tool heute ohne gelernte Fälle. „Mit importierten Fällen“ = so gut wäre es, wenn alle diese Fälle gelernt sind. ' +
+      "Dafür wird jeder Fall wie ein neuer Fall getestet: er selbst und Fälle mit genau gleichem Text zählen dabei nicht. Deine bisher gelernten Fälle werden beim Test nicht verwendet.</p>";
+    var others = r.variants.filter(function (v) { return v.id !== "regeln" && v.id !== "gelernt"; });
+    if (others.length) html += "<details><summary>Weitere Varianten (zur Feinabstimmung)</summary><div class=\"scroll\"><table class=\"tbl\">" + head + "<tbody>" +
+      others.map(function (v) { return row(v, false); }).join("") + "</tbody></table></div></details>";
+
+    // Pro Klassifizierung
+    var pc = imp.codesAll ? r.perCode : r.perCode.slice(0, 40);
+    html += "<details" + (imp.codesAll ? " open" : "") + "><summary>Pro Klassifizierung (" + fmt(r.perCode.length) + ")</summary><div class=\"scroll\"><table class=\"tbl\"><thead><tr>" +
+      '<th>Klassifizierung</th><th class="num">Fälle</th><th class="num">Stichwörter<br>Platz 1 / Top 3</th><th class="num">Mit Fällen<br>Platz 1 / Top 3</th><th>Oft stattdessen auf Platz 1</th></tr></thead><tbody>' +
+      pc.map(function (p) {
+        return "<tr><td>" + codeHtml(p.code) + '</td><td class="num">' + fmt(p.n) + '</td><td class="num">' + pct(p.regeln.top1, p.n) + " / " + pct(p.regeln.top3, p.n) +
+          '</td><td class="num">' + pct(p.gelernt.top1, p.n) + " / " + pct(p.gelernt.top3, p.n) + "</td><td>" +
+          (p.wrong || []).map(function (w) { return "<code>" + esc(w[0]) + "</code> (" + fmt(w[1]) + "×)"; }).join(", ") + "</td></tr>";
+      }).join("") + "</tbody></table></div>" +
+      (!imp.codesAll && r.perCode.length > 40 ? '<button class="btn" type="button" data-ev="codes">Alle ' + fmt(r.perCode.length) + " anzeigen</button>" : "") + "</details>";
+
+    // Verwechslungen
+    function confTable(list) {
+      if (!list || !list.length) return '<p class="note">Keine.</p>';
+      return '<div class="scroll"><table class="tbl"><thead><tr><th>Richtig wäre</th><th>Vorgeschlagen auf Platz 1</th><th class="num">Anzahl</th></tr></thead><tbody>' +
+        list.slice(0, 20).map(function (x) {
+          return "<tr><td>" + codeHtml(x.exp) + "</td><td>" + (x.got === "-" ? '<span class="bad">kein Vorschlag</span>' : codeHtml(x.got)) + '</td><td class="num">' + fmt(x.n) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    html += "<details><summary>Häufigste Verwechslungen</summary><p class=\"note\"><b>Nur Stichwörter:</b></p>" + confTable(r.confusions.regeln) +
+      "<p class=\"note\"><b>Mit importierten Fällen:</b></p>" + confTable(r.confusions.gelernt) + "</details>";
+
+    // Fehlgriffe (nur lokal sichtbar)
+    var errs = r.errors || [];
+    html += "<details" + (imp.errN > 25 ? " open" : "") + "><summary>Fehlgriffe ansehen (" + fmt(errs.length) + ") – nur hier sichtbar, nicht im Bericht</summary>" +
+      '<p class="note">Fälle, bei denen die richtige Klassifizierung nicht unter den 3 Vorschlägen war (mit Stichwörtern oder mit Fällen). „Im Feld öffnen“ zeigt den Fall oben im Eingabefeld.</p>' +
+      errs.slice(0, imp.errN).map(function (x) {
+        var cs = imp.cases[x.i];
+        return '<div class="errcase"><b>Fall ' + fmt(x.i + 1) + "</b> · richtig wäre " + codeHtml(x.c) +
+          '<button class="btn" type="button" data-ev="open" data-i="' + x.i + '">Im Feld öffnen</button>' +
+          "<br>Stichwörter: " + codesHtml(x.regeln, x.c) + " · Mit Fällen: " + codesHtml(x.gelernt, x.c) +
+          '<div class="et">' + esc(snippet(cs ? Engine.prepare(cs.t).cleaned : "", 300)) + "</div></div>";
+      }).join("") +
+      (errs.length > imp.errN ? '<button class="btn" type="button" data-ev="moreErr">25 weitere anzeigen</button>' : "") + "</details>";
+
+    // Wörter
+    var W = r.words || [];
+    html += "<details><summary>Häufige Wörter je Klassifizierung (" + fmt(W.length) + ") – kommen in den Bericht</summary>" +
+      '<p class="note">Wörter, die in mindestens 5 Fällen einer Klassifizierung vorkommen. <b>Fett</b> = noch nicht in den Stichwörtern dieser Klassifizierung.</p>' +
+      (W.length ? W.map(function (x) {
+        return '<p class="words">' + codeHtml(x.code) + " (" + fmt(x.n) + " Fälle): " + x.words.map(function (w) {
+          return '<span class="' + (w[2] ? "known" : "new") + '">' + esc(w[0]) + "</span> (" + fmt(w[1]) + ")";
+        }).join(", ") + "</p>";
+      }).join("") : '<p class="note">Zu wenige Fälle je Klassifizierung.</p>') + "</details>";
+
+    // Bericht
+    var rep = JSON.stringify(buildReport(r), null, 1);
+    html += '<h3>Bericht</h3><p class="note">Der Bericht enthält nur Zahlen, Codes, Stichwort-Regeln und Wörter, die in mindestens 5 Fällen vorkommen – <b>keine Kundentexte</b>. ' +
+      "Er kann weitergegeben werden, damit die Stichwörter gezielt verbessert werden. Bitte vorher kurz durchsehen.</p>" +
+      '<div class="btnrow"><button class="btn primary" type="button" data-ev="report">Bericht exportieren (ohne Kundentexte)</button></div>' +
+      '<details><summary>Bericht ansehen</summary><pre class="report">' + esc(rep) + "</pre></details>";
+    $("evalOut").innerHTML = html;
+  }
+
+  function buildReport(r) {
+    var res = imp.res || { total: 0, cases: [], noCode: 0, noText: 0, unknown: [] };
+    return {
+      app: "Fall-Klassifizierung", typ: "Auswertung", version: 1, erstellt: new Date().toISOString().slice(0, 10),
+      hinweis: "Enthält keine Kundentexte: nur Zahlen, Codes, Stichwort-Regeln und Wörter aus mindestens 5 Fällen.",
+      quelle: { format: imp.format, zeilen: res.total, faelle: res.cases.length, ohneCode: res.noCode, ohneText: res.noText,
+        nichtErkannteCodes: res.unknown.map(function (u) { return [snippet(u[0], 40), u[1]]; }) },
+      test: { verwendbar: r.usable, getestet: r.tested, jederNte: r.sampleEvery, uebersprungen: r.skipped },
+      methoden: r.variants.map(function (v) {
+        return { id: v.id, name: v.name, n: v.n, top1: v.top1, top3: v.top3, keinVorschlag: v.none, top1Prozent: pct(v.top1, v.n), top3Prozent: pct(v.top3, v.n) };
+      }),
+      proCode: r.perCode,
+      verwechslungen: r.confusions,
+      ausloeser: r.triggers,
+      woerter: r.words
+    };
+  }
+
+  $("evalOut").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-ev]");
+    if (!b) return;
+    var what = b.getAttribute("data-ev");
+    if (what === "codes") { imp.codesAll = true; renderEval(); }
+    else if (what === "moreErr") { imp.errN += 25; renderEval(); }
+    else if (what === "open") {
+      var cs = imp.cases && imp.cases[parseInt(b.getAttribute("data-i"), 10)];
+      if (!cs) return;
+      q.value = cs.t; render(); window.scrollTo(0, 0); q.focus();
+    } else if (what === "report" && imp.result) {
+      download("fall-klassifizierung-auswertung-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(buildReport(imp.result), null, 1));
+    }
+  });
+
+  // --- Alle als gelernte Fälle übernehmen
+  function trySave(arr) {
+    try { window.localStorage.setItem(KEY, JSON.stringify(arr)); return true; } catch (e) { return false; }
+  }
+  $("btnLearnAll").addEventListener("click", function () {
+    if (!imp.res || !imp.res.cases.length) return;
+    var seen = {}, add = [], today = new Date().toISOString().slice(0, 10);
+    learned.forEach(function (e) { seen[e.c + "\u0001" + e.t] = 1; });
+    imp.res.cases.forEach(function (x) {
+      var t = Engine.learnable(x.t);
+      if (!t) return;
+      t = t.slice(0, 800);
+      var k = x.c + "\u0001" + t;
+      if (seen[k]) return;
+      seen[k] = 1; add.push({ t: t, c: x.c, d: today, s: "import" });
+    });
+    if (!add.length) { toast("Keine neuen Fälle zum Übernehmen"); return; }
+    if (!window.confirm(fmt(add.length) + " Fälle als gelernte Fälle übernehmen?\nSie werden nur in diesem Browser gespeichert und können unter „Gelernte Fälle“ wieder gelöscht werden.")) return;
+    var base = learned.slice(), n = add.length;
+    storageOk = trySave(base);                                      // false: Speichern gar nicht möglich, nur bis zum Schliessen
+    if (storageOk && !trySave(base.concat(add))) {                  // Speicher voll: so viele wie möglich
+      var lo = 0, hi = add.length - 1;
+      while (lo < hi) { var mid = Math.ceil((lo + hi) / 2); if (trySave(base.concat(add.slice(0, mid)))) lo = mid; else hi = mid - 1; }
+      n = lo; trySave(base.concat(add.slice(0, n)));
+    }
+    learned = base.concat(add.slice(0, n));
+    reindex(); render();
+    if (!storageOk) toast(fmt(n) + " Fälle übernommen – aber nur bis zum Schliessen (Browser speichert nicht)");
+    else if (n < add.length) toast("Browserspeicher voll: nur " + fmt(n) + " von " + fmt(add.length) + " Fällen übernommen");
+    else toast(fmt(n) + " Fälle übernommen");
   });
 
   reindex();
